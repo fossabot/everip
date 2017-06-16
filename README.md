@@ -9,7 +9,7 @@ The EVER/IP Suite
 | centraldogma      | `relaymap` | Provides relay functionality between conduits             |
 | centraldogma      | `cmdcenter` | Commands layer-2 control plane             |
 | centraldogma      | `manager` | Manages layer-3 sessions             |
-| magi      | `eventdriver` | Shuttles events between laters             |
+| magi      | `eventdriver` | Shuttles events between layers             |
 | magi      | `starfinder` | Searches and monitors peers in field network             |
 | misato      | `cmd` | Command interface for operators             |
 | misato      | `everip` | Initialization engine             |
@@ -25,3 +25,8 @@ The EVER/IP Suite
 
 ## Trademark Notice
 connectFree, the connectFree logo, EVER and EVER/IP are registered trademarks of connectFree Corporation in Japan and other countries. connectFree trademarks and branding may not be used without the express written permission of connectFree.
+
+## License and Copyright
+Copyright (c) 2017 kristopher tate & connectFree Corporation.
+
+This project may be licensed under the terms of the GNU AFFERO General Public License version 3. Corporate and Academic licensing terms are also available. Please contact <licensing@connectfree.co.jp> for details.
