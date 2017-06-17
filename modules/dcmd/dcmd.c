@@ -34,7 +34,9 @@ static int menu_legal(struct re_printf *pf, void *unused)
 	(void)unused;
 	int err = 0;
 
+#if SIGNED_CLA_LICENSE
 	bool show_instructions = false;
+#endif
 
 	err |= re_hprintf(pf, "\n[Legal Information]\n");
 
@@ -46,7 +48,7 @@ static int menu_legal(struct re_printf *pf, void *unused)
 					, EVERIP_VERSION
 					);
 
-#if CLA_LICENSED
+#if SIGNED_CLA_LICENSE
 	err |= re_hprintf(pf, "\n---[THIS SOFTWARE IS LICENSED UNDER CLA/ODA]---\n");
 
 err |= re_hprintf( pf
