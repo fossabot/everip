@@ -353,7 +353,7 @@ static struct csock *_clear_to_send( struct cd_manager *manager
 	}
 
 	mbuf_advance(mb, -RELAYMAP_HEADER_LENGTH);
-    info("HOW CLOSE? %d\n", (uintptr_t)mbuf_buf(mb) - (uintptr_t)sh);
+    /*info("HOW CLOSE? %d\n", (uintptr_t)mbuf_buf(mb) - (uintptr_t)sh);*/
 	ASSERT_TRUE((uint8_t*)sh == mbuf_buf(mb));
 
     if (!sh->label_be) {
