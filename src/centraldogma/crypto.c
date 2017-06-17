@@ -110,7 +110,7 @@ int caengine_session_encrypt(struct caengine_session *session, struct mbuf *mb)
     CAEDEBUG0(session, "caengine_session_encrypt");
 
     if (!session->has_sk) {
-        crypto_box_beforenm( session->shared_key
+        (void)crypto_box_beforenm( session->shared_key
                            , session->remote_pubkey
                            , session->ctx->my_prvkey);
         session->has_sk = 1;
@@ -177,7 +177,7 @@ enum CAENGINE_DECRYPTERR caengine_session_decrypt(struct caengine_session *sessi
     }
 
     if (!session->has_sk) {
-        crypto_box_beforenm( session->shared_key
+        (void)crypto_box_beforenm( session->shared_key
                            , session->remote_pubkey
                            , session->ctx->my_prvkey);
         session->has_sk = 1;

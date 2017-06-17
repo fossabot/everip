@@ -215,7 +215,7 @@ static void eth_c_destructor(void *data)
 
 }
 
-static int register_eth_conduit( char ifname[IFNAMSIZ]
+static int register_eth_conduit( const char ifname[IFNAMSIZ]
 							   , void *arg )
 {
 
