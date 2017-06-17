@@ -136,7 +136,6 @@ ifeq ($(LIBRE_SO),)
 	@echo "ERROR: Missing library files for libre. Check LIBRE_SO"
 	@exit 2
 endif
-
 ifeq ($(LIBSODIUM_PATH),)
 	@echo "ERROR: Missing header files for libsodium. Check LIBSODIUM_PATH"
 	@exit 2
@@ -144,6 +143,13 @@ endif
 
 LIBS  += $(LIBSODIUM_PATH)/lib/libsodium.a
 LIB_OBJS+= $(LIBSODIUM_PATH)/lib/libsodium.a
+
+ifneq ($(USEGENDO),)
+LIBS  += ../libgendo/libgendo.a
+LIB_OBJS+= ../libgendo/libgendo.a
+CFLAGS    += -I../libgendo/include
+CFLAGS += -DHAVE_GENDO
+endif
 
 Makefile:	mk/*.mk $(MOD_MK) $(LIBRE_MK)
 

@@ -20,6 +20,10 @@
 
 #include <sodium.h>
 
+#if defined(HAVE_GENDO)
+#include <gendo.h>
+#endif
+
 static struct everip {
 	/* ritsuko */
 	struct network *net;
@@ -74,6 +78,10 @@ int everip_init(void)
 	err = cmd_init(&everip.commands);
 	if (err)
 		return err;
+
+#if defined(HAVE_GENDO)
+	debug("have gendo! %u\n", gendo_sign(NULL, NULL));
+#endif
 
 	/* initiate licenser */
 	err = licenser_alloc(&everip._licenser, "ever.license");
