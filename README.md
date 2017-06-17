@@ -23,6 +23,16 @@ The EVER/IP Suite
 | terminaldogma      | `terminaldogma` | Interface connecting centraldogma to lowest layers of the device            |
 | terminaldogma      | `tun_*` | Platform specific tunnel interfaces            |
 
+## Modules
+
+| Module     | Kind   | Purpose                                    |
+|----------|----------|------------------------------------------------|
+| eth      | `conduit` | Implements the ETH conduit for EVER/IP over Layer-2            |
+| udp      | `conduit` | Implements the UDP conduit for EVER/IP over Layer-3             |
+| dcmd      | `app` | Interactive debug command suite for EVER/IP             |
+| stdio      | `ui` | Forms the bridge between the terminal and EVER/IP             |
+
+
 ## Trademark Notice
 connectFree, the connectFree logo, EVER and EVER/IP are registered trademarks of connectFree Corporation in Japan and other countries. connectFree trademarks and branding may not be used without the express written permission of connectFree.
 
