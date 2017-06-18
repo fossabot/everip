@@ -172,6 +172,7 @@ void treeoflife_msg_recv( struct treeoflife *t
 				t->coords[mcl+i] = w;
 			}
 		}
+		treeoflife_children_notify(t);
 	} else if (o_kind->u.pl.p[0] == 't' && o_kind->u.pl.p[1] == 'r') {
 		const struct odict_entry *o_id = odict_lookup(o, "id");
 		const struct odict_entry *o_rid = odict_lookup(o, "rid");
