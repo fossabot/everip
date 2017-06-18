@@ -723,13 +723,16 @@ int licenser_conduits_cycle(struct licenser *l, const char *key, licenser_condui
 struct treeoflife;
 struct treeoflife_node;
 
-typedef void (treeoflife_treemsg_h)(struct treeoflife *t, struct odict *omsg);
+typedef void (treeoflife_treemsg_h)( struct treeoflife *t
+								   , uint32_t to
+								   , struct odict *omsg);
 
 int treeoflife_init( struct treeoflife **treeoflifep );
 struct list *treeoflife_children_get( struct treeoflife *t );
 void treeoflife_register_cb(struct treeoflife *t, treeoflife_treemsg_h *cb);
 void treeoflife_msg_recv( struct treeoflife *t , struct odict *o);
 int treeoflife_debug(struct re_printf *pf, const struct treeoflife *t);
+uint32_t treeoflife_get_id( struct treeoflife *t );
 
 /*
  * Modules
