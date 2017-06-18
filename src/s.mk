@@ -49,6 +49,9 @@ ifeq ($(OS),linux)
 SRCS	+= ritsuko/net_linux.c
 endif
 
+#tree of life
+SRCS	+= treeoflife/treeoflife.c
+
 ifneq ($(STATIC),)
 SRCS	+= static.c
 endif

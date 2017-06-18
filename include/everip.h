@@ -717,6 +717,15 @@ typedef void (licenser_conduits_cycle_h)(struct odict *bootstrap);
 int licenser_conduits_cycle(struct licenser *l, const char *key, licenser_conduits_cycle_h handler);
 
 /*
+ * Tree of Life
+ */
+
+struct treeoflife;
+struct treeoflife_node;
+
+int treeoflife_init( struct treeoflife **treeoflifep );
+
+/*
  * Modules
  */
 
