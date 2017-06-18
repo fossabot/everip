@@ -22,22 +22,111 @@ struct treeoflife_node;
 
 struct treeoflife {
 	struct list children;
+	struct treeoflife_node *self;
+	struct tmr tmr;
+
+	treeoflife_treemsg_h *cb;
 };
 
 struct treeoflife_node {
-	uint64_t root_id;
-	uint16_t height;
-	struct treeoflife_node *parent;
+	struct le le;
+	uint64_t id;
+	uint64_t rootid;
+	uint64_t height;
+	uint64_t parentid;
 };
+
+struct list *treeoflife_children_get( struct treeoflife *t )
+{
+	return &t->children;
+}
+
+void treeoflife_msg_recv( struct treeoflife *t
+						, struct odict *o)
+{
+	if (!t) return;
+	uint16_t w = 1;
+	error("[%p] GOT DICT: [%p]%H\n", t, o, odict_debug, o);
+
+	const struct odict_entry *o_id = odict_lookup(o, "id");
+	const struct odict_entry *o_rid = odict_lookup(o, "rid");
+	const struct odict_entry *o_hei = odict_lookup(o, "h");
+	const struct odict_entry *o_pid = odict_lookup(o, "pid");
+
+	if (   !o_id || o_id->type != ODICT_INT
+	    || !o_rid || o_rid->type != ODICT_INT
+	    || !o_hei || o_hei->type != ODICT_INT
+	    || !o_pid || o_pid->type != ODICT_INT) {
+		/* bad message? */
+		return;
+	}
+
+	if (   (uint64_t)o_rid->u.integer > t->self->rootid
+		|| ((uint64_t)o_rid->u.integer == t->self->rootid
+			&& (uint64_t)o_hei->u.integer + w < t->self->height) )
+	{
+		t->self->parentid = o_id->u.integer;
+		t->self->height = o_hei->u.integer + w;
+		t->self->rootid = o_rid->u.integer;
+	}
+
+}
+
+void treeoflife_register_cb( struct treeoflife *t
+						   , treeoflife_treemsg_h *cb)
+{
+	if (!t) return;
+	t->cb = cb;
+}
+
+static void _tmr_cb(void *data)
+{
+	struct treeoflife *t = data;
+	struct odict *outdict;
+    odict_alloc(&outdict, 8);
+    odict_entry_add(outdict, "id", ODICT_INT, t->self->id);
+    odict_entry_add(outdict, "rid", ODICT_INT, t->self->rootid);
+    odict_entry_add(outdict, "pid", ODICT_INT, t->self->parentid);
+    odict_entry_add(outdict, "h", ODICT_INT, t->self->height);
+
+    error("[%p] SENDING DICT: %H\n", t, odict_debug, outdict);
+
+	if (t->cb)
+		t->cb(t, outdict);
+
+	outdict = mem_deref(outdict);
+	tmr_start(&t->tmr, 2000 + ((uint8_t)rand_char()), _tmr_cb, t);
+}
+
+int treeoflife_debug(struct re_printf *pf, const struct treeoflife *t)
+{
+	int err = 0;
+	err |= re_hprintf(pf, "[%p] id:%u, rid:%u, h:%u, pid:%u\n", t
+															  , t->self->id
+															  , t->self->rootid
+															  , t->self->height
+															  , t->self->parentid);
+
+	return err;
+}
+
+static void treeoflife_node_destructor(void *data)
+{
+	struct treeoflife_node *tn = data;
+	list_unlink(&tn->le);
+}
 
 static void treeoflife_destructor(void *data)
 {
 	struct treeoflife *t = data;
 	list_flush(&t->children);
+	tmr_cancel(&t->tmr);
+	t->self = mem_deref(t->self);
 }
 
 int treeoflife_init( struct treeoflife **treeoflifep )
 {
+	int err = 0;
 	struct treeoflife *t;
 
 	if (!treeoflifep)
@@ -49,8 +138,26 @@ int treeoflife_init( struct treeoflife **treeoflifep )
 
 	list_init(&t->children);
 
+	/* create self */
+	t->self = mem_zalloc(sizeof(*t->self), treeoflife_node_destructor);
+	if (!t->self) {
+		err = ENOMEM;
+		goto out;
+	}
+
+	t->self->id = rand_u64();
+	t->self->rootid = t->self->id;
+	t->self->height = 0;
+	t->self->parentid = 0;
+
+	tmr_init(&t->tmr);
+	tmr_start(&t->tmr, 0, _tmr_cb, t);
+
 	*treeoflifep = t;
 
-	return 0;
+out:
+	if (err)
+		t = mem_deref(t);
+	return err;
 }
 
