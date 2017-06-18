@@ -30,11 +30,17 @@ struct treeoflife {
 
 struct treeoflife_node {
 	struct le le;
-	uint64_t id;
-	uint64_t rootid;
-	uint64_t height;
-	uint64_t parentid;
+	uint32_t id;
+	uint32_t rootid;
+	uint32_t height;
+	uint32_t parentid;
 };
+
+static void treeoflife_node_destructor(void *data)
+{
+	struct treeoflife_node *tn = data;
+	list_unlink(&tn->le);
+}
 
 struct list *treeoflife_children_get( struct treeoflife *t )
 {
@@ -61,13 +67,38 @@ void treeoflife_msg_recv( struct treeoflife *t
 		return;
 	}
 
-	if (   (uint64_t)o_rid->u.integer > t->self->rootid
-		|| ((uint64_t)o_rid->u.integer == t->self->rootid
-			&& (uint64_t)o_hei->u.integer + w < t->self->height) )
+	if (   (uint32_t)o_rid->u.integer > t->self->rootid
+		|| ((uint32_t)o_rid->u.integer == t->self->rootid
+			&& (uint32_t)o_hei->u.integer + w < t->self->height) )
 	{
-		t->self->parentid = o_id->u.integer;
-		t->self->height = o_hei->u.integer + w;
-		t->self->rootid = o_rid->u.integer;
+		t->self->parentid = (uint32_t)o_id->u.integer;
+		t->self->height = (uint32_t)o_hei->u.integer + w;
+		t->self->rootid = (uint32_t)o_rid->u.integer;
+	}
+
+    struct le *le;
+    struct treeoflife_node *tn = NULL;
+    LIST_FOREACH(&t->children, le) {
+        tn = le->data;
+        if ((uint32_t)o_id->u.integer == tn->id) {
+        	break;
+        } else {
+        	tn = NULL;
+        }
+    }
+
+	if (!tn && (uint32_t)o_pid->u.integer == t->self->id) {
+		/* we are the parent of this node */
+		tn = mem_zalloc(sizeof(*tn), treeoflife_node_destructor);
+		if (!tn) {
+			return;
+		}
+		tn->id = (uint32_t)o_id->u.integer;
+		list_append(&t->children, &tn->le, tn);
+	}
+
+	if (tn && (uint32_t)o_pid->u.integer != t->self->id) {
+		tn = mem_deref(tn); /* remove from children if need be*/
 	}
 
 }
@@ -107,13 +138,14 @@ int treeoflife_debug(struct re_printf *pf, const struct treeoflife *t)
 															  , t->self->height
 															  , t->self->parentid);
 
-	return err;
-}
+    struct le *le;
+    struct treeoflife_node *tn = NULL;
+    LIST_FOREACH(&t->children, le) {
+        tn = le->data;
+        err |= re_hprintf(pf, "  [%p] CHILD: %u\n", tn, tn->id);
+    }
 
-static void treeoflife_node_destructor(void *data)
-{
-	struct treeoflife_node *tn = data;
-	list_unlink(&tn->le);
+	return err;
 }
 
 static void treeoflife_destructor(void *data)
@@ -145,7 +177,7 @@ int treeoflife_init( struct treeoflife **treeoflifep )
 		goto out;
 	}
 
-	t->self->id = rand_u64();
+	t->self->id = rand_u32();
 	t->self->rootid = t->self->id;
 	t->self->height = 0;
 	t->self->parentid = 0;
