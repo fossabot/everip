@@ -141,15 +141,15 @@ ifeq ($(LIBSODIUM_PATH),)
 	@exit 2
 endif
 
-LIBS  += $(LIBSODIUM_PATH)/lib/libsodium.a
-LIB_OBJS+= $(LIBSODIUM_PATH)/lib/libsodium.a
-
 ifneq ($(USEGENDO),)
 LIBS  += ../libgendo/libgendo.a
 LIB_OBJS+= ../libgendo/libgendo.a
 CFLAGS    += -I../libgendo/include
 CFLAGS += -DHAVE_GENDO
 endif
+
+LIBS  += $(LIBSODIUM_PATH)/lib/libsodium.a
+LIB_OBJS+= $(LIBSODIUM_PATH)/lib/libsodium.a
 
 Makefile:	mk/*.mk $(MOD_MK) $(LIBRE_MK)
 
@@ -169,7 +169,7 @@ endif
 $(BIN):	$(APP_OBJS)
 #ifneq ($(GPROF),)
 	@echo "  LDS     $@"
-	$(HIDE)$(LD) $(LFLAGS) $(APP_LFLAGS) $^ $(LIBRE_SO)/libre.a $(LIBS) -o $@
+	$(HIDE)$(LD) $(LFLAGS) $(APP_LFLAGS) $^ $(LIBS) $(LIBRE_SO)/libre.a -o $@
 #else
 #	@echo "  LD      $@"
 #	$(HIDE)$(LD) $(LFLAGS) $(APP_LFLAGS) $^ \
