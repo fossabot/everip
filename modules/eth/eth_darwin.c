@@ -66,6 +66,7 @@ static struct csock *eth_handle_incoming( struct csock *csock
 	ssize_t n;
 	struct eth_csock *eth_c = container_of(csock, struct eth_csock, csock);
 
+	/*error("[ETH:PPRE] %w\n", mb->buf, mb->size);*/
 	size_t pfix = mb->pos;
 
 	mbuf_set_pos(mb, 0);
@@ -77,7 +78,7 @@ static struct csock *eth_handle_incoming( struct csock *csock
 	pfix = mb->pos;
 	/* write dst */
 	if (csaddr->flags & CSOCK_ADDR_BCAST) {
-		error("ETH BROADCAST\n");
+		/*error("ETH BROADCAST\n");*/
 		mbuf_fill(mb, 0xFF, 6);
 	} else {
 		mbuf_write_mem(mb, csaddr->a.mac, 6);
@@ -88,6 +89,8 @@ static struct csock *eth_handle_incoming( struct csock *csock
 	mbuf_write_u16(mb, arch_htobe16(0xCF01));
 
 	mbuf_set_pos(mb, pfix);
+
+	/*error("[ETH:SEND] %w\n", mbuf_buf(mb), mbuf_get_left(mb));*/
 
     n = write( eth_c->fd
     		 , mbuf_buf(mb)
@@ -349,10 +352,10 @@ static bool _if_handler( const char *ifname
 	struct pl num;
 	err = re_regex(ifname, strlen(ifname), "en[0-9]+", &num);
 	if (err) {
-		error("%s is not an ethernet if! [%u]\n", ifname, err);
+		/*error("%s is not an ethernet if! [%u]\n", ifname, err);*/
 		return false;
 	}
-
+	
 	register_eth_conduit(ifname, eth_m);
 	return false;
 }

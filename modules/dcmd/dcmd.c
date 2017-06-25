@@ -335,6 +335,17 @@ static int cmd_conduits_debug(struct re_printf *pf, void *unused)
 	return conduits_debug(pf, everip_conduits());
 }
 
+static int cmd_treeoflife_debug(struct re_printf *pf, void *unused)
+{
+	(void)unused;
+	return treeoflife_debug(pf, everip_treeoflife());
+}
+
+static int cmd_treeoflife_dht_debug(struct re_printf *pf, void *unused)
+{
+	(void)unused;
+	return treeoflife_dht_debug(pf, everip_treeoflife());
+}
 
 
 static const struct cmd debugcmdv[] = {
@@ -346,6 +357,8 @@ static const struct cmd debugcmdv[] = {
 {"memstat", 'm',      0, "Memory status",            mem_status           },
 {"legal", 0,      0, "Legal Information",            menu_legal           },
 {"peers", 'p',      0, "Peers and Conduits",            cmd_conduits_debug },
+{"tree", 't',      0, "Routing Tree Information",            cmd_treeoflife_debug },
+{"dht", 'd',      0, "DHT Database",            cmd_treeoflife_dht_debug },
 
 };
 

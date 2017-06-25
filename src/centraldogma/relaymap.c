@@ -120,7 +120,7 @@ static struct csock *_receive_pkt( struct csock *source_cs
     const uint32_t dest_idx = label_decompress(label, bits);
     const uint32_t src_bits = label_bitsused_number(src_idx);
 
-#if 1
+#if 0
     re_printf("src_idx = %u\n", src_idx);
     re_printf("dest_idx = %u\n", dest_idx);
     re_printf("src_bits = %u\n", src_bits);

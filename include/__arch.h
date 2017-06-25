@@ -116,6 +116,18 @@ static inline uint64_t reverse_b64(uint64_t i)
     #undef swap
 }
 
+#define arch_min(x, y) ({           \
+    __typeof__(x) _min1 = (x);          \
+    __typeof__(y) _min2 = (y);          \
+    (void) (&_min1 == &_min2);      \
+    _min1 < _min2 ? _min1 : _min2; })
+
+#define arch_max(x, y) ({                \
+    __typeof__(x) _max1 = (x);          \
+    __typeof__(y) _max2 = (y);          \
+    (void) (&_max1 == &_max2);      \
+    _max1 > _max2 ? _max1 : _max2; })
+
 static inline uint32_t chksum_one( const uint8_t* buf
                          , uint16_t len
                          , uint32_t s )
@@ -145,4 +157,44 @@ static inline uint16_t chksum_buf(const uint8_t* buf, uint16_t len)
 {
     ASSERT_TRUE(!((uintptr_t)buf % 2));
     return chksum_finish(chksum_one(buf, len, 0));
+}
+
+enum {
+    BSZ   = 8,
+    BMASK = (BSZ - 1)
+};
+
+#define BITSTOBYTES(bits) ((((bits) + 7) & ~0x07)>>3)
+
+static inline uint32_t i2o(uint32_t i)
+{
+    return i / BSZ;
+}
+
+static inline uint8_t i2b(uint32_t i)
+{
+    return (uint8_t)1<<(i & BMASK);
+}
+
+static inline bool b_val(const uint8_t *bv, uint32_t i)
+{
+    return 0 != (bv[i2o(i)] & i2b(i));
+}
+
+static inline void b_set(uint8_t *bv, uint32_t i)
+{
+    bv[i2o(i)] |= i2b(i);
+}
+
+static inline void b_clr(uint8_t *bv, uint32_t i)
+{
+    bv[i2o(i)] &= ~i2b(i);
+}
+
+static inline void b_assign(uint8_t *bv, uint32_t i, bool val)
+{
+    if (val)
+        b_set(bv, i);
+    else
+        b_clr(bv, i);
 }

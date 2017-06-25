@@ -26,7 +26,6 @@ SRCS	+= magi/starfinder.c
 
 #misato (application)
 SRCS	+= misato/everip.c
-SRCS	+= misato/licenser.c
 SRCS	+= misato/cmd.c
 SRCS	+= misato/ui.c
 SRCS	+= misato/module.c

@@ -237,18 +237,15 @@ static struct csock *_from_relaymap( struct csock *csock
         }
         debug("Hello, I would like to make a session with you!\n");
 
-        uint8_t _remote_pubkey[32];
-        mbuf_advance(mb, 4); /* nonce */
-        mbuf_read_mem(mb, _remote_pubkey, 32);
-        mbuf_advance(mb, -36);
-
+        struct cae_header *cae_h = (struct cae_header *)mbuf_buf(mb);
         uint8_t ip6[16];
-        if (!addr_calc_pubkeyaddr(ip6, _remote_pubkey )) {
+
+        if (!addr_calc_pubkeyaddr(ip6, cae_h->d )) {
             debug("DROP non valid key\n");
             return NULL;
         }
 
-        if (!memcmp(_remote_pubkey, everip_caengine()->my_pubkey, 32)) {
+        if (!memcmp(cae_h->d, everip_caengine()->my_pubkey, 32)) {
             debug("DROP cannot connect to ourselves\n");
             return NULL;
         }
@@ -257,7 +254,7 @@ static struct csock *_from_relaymap( struct csock *csock
 
         debug("label = %w\n", &label, 4);
 
-		session = _session_get(manager, ip6, _remote_pubkey, 0, label);
+        session = _session_get(manager, ip6, cae_h->d, 0, label);
         caengine_session_resetiftimedout( session->caes );
     }
 
@@ -347,7 +344,7 @@ static struct csock *_clear_to_send( struct cd_manager *manager
 
 	if (caengine_session_state(session->caes) >= CAENGINE_STATE_RECEIVED_KEY) {
 		mbuf_advance(mb, -4);
-        info("writing session->hndl_send = %u\n", session->hndl_send);
+        /*info("writing session->hndl_send = %u\n", session->hndl_send);*/
 		mbuf_write_u32(mb, arch_htobe32(session->hndl_send));
 		mbuf_advance(mb, -4);
 	}
@@ -397,7 +394,7 @@ static struct csock *_from_terminaldogma( struct csock *csock
     							  , arch_betoh32(hdr->version_be)
     							  , arch_betoh64(hdr->sh.label_be));
     	} else {
-    		error("X:TODO lookup\n");
+    		error("Searching for node...\n");
     		return NULL;
     	}
     }
@@ -407,7 +404,8 @@ static struct csock *_from_terminaldogma( struct csock *csock
     }
 
     if (!session->version) {
-        error("X:TODO lookup\n");
+        /*BREAKPOINT;*/
+        error("Searching for node...\n");
         return NULL;
     }
 
@@ -418,18 +416,21 @@ static struct csock *_from_terminaldogma( struct csock *csock
         hdr->sh.label_be = arch_htobe64(session->label_send);
         _wireheader_setversion(&hdr->sh, 1);
     } else {
-        error("X:TODO lookup\n");
+        /*BREAKPOINT;*/
+        error("Searching for node...\n");
         return NULL;
     }
 
     /* limit to magi messages, UNLESS we have a pvsession */
     caengine_session_resetiftimedout( session->caes );
+#if 0
     if ( wire_data__ctype_get(wdata) != EIPCTYPES_MAGI
       && caengine_session_state(session->caes) < CAENGINE_STATE_RECEIVED_KEY )
     {
-        error("X:TODO lookup\n");
+        /*error("X:TODO lookup\n");*/
         return NULL;
     }
+#endif
 
 	return _clear_to_send(manager, session, mb);
 }

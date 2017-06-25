@@ -134,7 +134,7 @@ static struct csock *_from_manager( struct csock *csock
     } else if (type_be == CTRL_TYPE_PONGKEY_be
             || type_be == CTRL_TYPE_PONG_be)
     {
-    	error("got pong!\n");
+    	/*error("got pong!\n");*/
 
         /*BREAKPOINT;*/
 

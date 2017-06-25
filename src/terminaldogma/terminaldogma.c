@@ -18,19 +18,6 @@
 #include <re.h>
 #include <everip.h>
 
-struct PACKONE _wire_ipv6_header
-{
-    uint16_t version;
-    uint16_t flow_be;
-    uint16_t payload_be;
-    uint8_t next_header;
-    uint8_t hop;
-    uint8_t src[16];
-    uint8_t dst[16];
-};
-#define WIRE_IPV6_HEADER_LENGTH 40
-ASSERT_COMPILETIME(sizeof(struct _wire_ipv6_header) == WIRE_IPV6_HEADER_LENGTH);
-
 static struct csock *_from_ctrdogma( struct csock *csock
 							       , struct mbuf *mb )
 {

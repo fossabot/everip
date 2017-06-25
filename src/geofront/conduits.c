@@ -307,7 +307,6 @@ static bool _peer_find_cb(struct le *le, void *arg)
         struct csock_addr *csaddr = arg;
 
         if ( csaddr->flags & CSOCK_ADDR_MAC ) {
-        	error("LEN MAC?\n");
         	return 0 == memcmp(&csaddr->a.mac, &p->csaddr.a.mac, 6);
         } else {
         	return sa_cmp(&csaddr->a.sa, &p->csaddr.a.sa, SA_ALL);
@@ -320,7 +319,7 @@ struct conduit_peer *conduits_peer_find( const struct conduits *conduits
         if (!conduits || !csaddr)
                 return NULL;
 
-         debug("HASH IS SET TO %u\n", csaddr->hash);
+         /*debug("HASH IS SET TO %u\n", csaddr->hash);*/
 
         return list_ledata(hash_lookup( conduits->peers
         							  , csaddr->hash
@@ -337,7 +336,7 @@ static struct csock *_relaymap_send( struct csock *csock
 	if (!csock || !mb)
 		return NULL;
 
-	debug("_relaymap_send\n");
+	/*debug("_relaymap_send\n");*/
 
 	struct conduit_peer *p = (struct conduit_peer *)csock;
 
@@ -365,7 +364,7 @@ static struct csock *_relaymap_send( struct csock *csock
 static void _send_ping_response(struct pl *_pl, uint32_t version, uint64_t ttl, void *userdata)
 {
 	struct conduit_peer *p = userdata;
-	debug("_send_ping_response\n");
+	/*debug("_send_ping_response\n");*/
 	if (!p) {
 		return;
 	}
@@ -387,7 +386,7 @@ static void _send_ping_response(struct pl *_pl, uint32_t version, uint64_t ttl, 
 static void _send_ping_build(uint32_t hashid, uint64_t cookie, void *userdata)
 {
 	struct conduit_peer *p = userdata;
-	debug("_send_ping_build\n");
+	/*debug("_send_ping_build\n");*/
 
 	if (!p)
 		return;
@@ -551,16 +550,39 @@ static struct csock *conduits_handle_beacon( struct conduit *conduit
 
 	conduits_peer_bootstrap( conduit
 						   , conduit->ctx
-						   , true
+						   , false
 						   , beacon->pubkey
 						   , csaddr
-						   , "HELLOJOHN"
+						   , "DEFAULT"
 						   , NULL /*"[FIELD IX]"*/
 						   , NULL);
 
 
 	return NULL;
 
+}
+
+static void _conduits_process_endpoints( struct conduits *c
+									   , struct conduit_peer *p)
+{
+	struct le *le;
+	struct conduit_peer *_p;
+    LIST_FOREACH(&c->allpeers, le) {
+    	_p = le->data;
+    	if (p != _p && !memcmp(p->addr.key, _p->addr.key, 32)) {
+    		/* similar peers?? */
+    		if (p->conduit == _p->conduit) {
+    			/* update and destroy old peer */
+	            p->addr.path = _p->addr.path;
+	            p->relaymap_cs.adj = _p->relaymap_cs.adj;
+	            p->relaymap_cs.adj->adj = &p->relaymap_cs;
+	            _p->relaymap_cs.adj = NULL;
+	            _p = mem_deref(_p);
+	            return;
+    		}
+    	}
+	}
+	return;
 }
 
 static struct csock *conduits_handle_incoming( struct csock *csock
@@ -593,10 +615,8 @@ static struct csock *conduits_handle_incoming( struct csock *csock
 		if (mbuf_get_left(mb) < CAE_HEADER_LENGTH)
 			return NULL;
 
-		/* 4+32+24+16 == [NONCE(4)][PUBKEY(32)][NDATA(24)][AUTH(16)][PAYLOAD]*/
-
 	    uint8_t remote_pubkey[32];
-	    mbuf_set_pos(mb, pfix + 4);
+	    mbuf_set_pos(mb, pfix + (4 + 12 + 24));
 	    mbuf_read_mem(mb, remote_pubkey, 32);
 		debug("remote_pubkey = %w\n", remote_pubkey, 32);
 		p = conduit_peer_create( conduit
@@ -653,7 +673,8 @@ static struct csock *conduits_handle_incoming( struct csock *csock
         addr_prefix(&p->addr);
 
         if (cae_state == CAENGINE_STATE_ESTABLISHED) {
-            error("X:TODO update_endpoint(ep);\n");
+            /*error("X:TODO update_endpoint(ep);\n");*/
+            _conduits_process_endpoints(conduit->ctx, p);
         } else {
             if (mbuf_get_left(mb) < 8 || mbuf_buf(mb)[7] != 1) {
                 error("DROP: NO CAE?\n");
@@ -706,6 +727,9 @@ int conduits_peer_bootstrap( struct conduit *conduit
 						   , remote_pubkey
 						   , outside_initiation );
 
+
+	/* set authentation as required */
+	caengine_session_setauth(p->caes, pword, login);
 
 	/* initiate flow between relaymap and peer */
 	p->relaymap_cs.send = _relaymap_send;

@@ -36,10 +36,15 @@ static inline bool everip_version_compat(uint32_t a, uint32_t b) {
 
 /* super defines */
 
+#define TYPE_BASE 256
+#define KEY_LENGTH 15
+#define ZONE_COUNT 1
+#define ROUTE_LENGTH 16 /* 128 bytes */
+
 #define EVER_OUTWARD_MBE_POS (300)
 #define EVER_OUTWARD_MBE_LENGTH (1500)
 
-#define CAE_HEADER_LENGTH (76)
+#define CAE_HEADER_LENGTH (120)
 #define CAE_HEADER_CHAL_LENGTH (12)
 
 #define CTRL_HEADER_LENGTH 4
@@ -397,7 +402,7 @@ int magi_starfinder_init( struct magi_starfinder **starfinderp, uint8_t publicke
  * Crypto
  */
 
-#if 0
+#if 1
 struct PACKONE cae_header
 {
     uint32_t a;
@@ -421,6 +426,8 @@ struct caengine {
 	uint8_t my_prvkey[32];
 	struct list sessions;
 	struct list authtokens;
+
+	bool activated;
 };
 
 struct caengine_authtoken {
@@ -461,6 +468,12 @@ struct caengine_session {
 
 	uint8_t remote_ip6[16];
 
+    uint8_t sharedsecretkey[32];
+	uint8_t remote_pubkey[32];
+    uint8_t remote_tmp_pubkey[32];
+    uint8_t local_tmp_prvkey[32];
+    uint8_t local_tmp_pubkey[32];
+
 	uint64_t lastpkt_ts;
 	uint64_t seconds_to_reset;
 
@@ -470,14 +483,12 @@ struct caengine_session {
     char *pword;
     int auth_type : 8;
 
+    uint32_t nonce_next;
+	bool is_initiator : 1;
+	bool req_auth : 1;
 	bool established : 1;
-	char *dbg;
 
-	/**/
-	uint32_t nonceid;
-	bool has_sk : 1;
-	uint8_t shared_key[32];
-	uint8_t remote_pubkey[32];
+	char *dbg;
 
 };
 
@@ -501,8 +512,7 @@ enum CAENGINE_DECRYPTERR {
     CAENGINE_DECRYPTERR_DECRYPT = 15
 };
 
-int caengine_init( struct caengine **caenginep
-				 , const uint8_t private_key[32] );
+int caengine_init( struct caengine **caenginep );
 
 int caengine_authtoken_add( struct caengine *caengine
                           , const char *login
@@ -585,8 +595,10 @@ enum CONDUIT_PEERSTATE
 
 struct conduit_peer {
 	struct csock relaymap_cs;
+	uint64_t pad;
 	struct le le;
 	struct le le_all;
+	uint64_t pad2;
 	struct conduit *conduit;
 
 	struct csock_addr csaddr;
@@ -701,38 +713,98 @@ struct tunif {
 int tunif_init( struct tunif **tunifp );
 
 /*
- * Licenser
- */
-
-struct licenser;
-int licenser_alloc(struct licenser **licenserp, const char *filename);
-int licenser_authenticate(struct licenser *l);
-
-const char * licenser_buildversion_get(struct licenser *l);
-int licenser_keyprivate_get(struct licenser *l, uint8_t privatekey[32]);
-const char * licenser_keypublic_get(struct licenser *l);
-
-typedef void (licenser_conduits_cycle_h)(struct odict *bootstrap);
-
-int licenser_conduits_cycle(struct licenser *l, const char *key, licenser_conduits_cycle_h handler);
-
-/*
  * Tree of Life
  */
 
 struct treeoflife;
 struct treeoflife_node;
+struct treeoflife_peer;
 
 typedef void (treeoflife_treemsg_h)( struct treeoflife *t
-								   , uint32_t to
-								   , struct odict *omsg);
+								   , struct treeoflife_peer *peer
+								   , struct mbuf *mb);
 
-int treeoflife_init( struct treeoflife **treeoflifep );
-struct list *treeoflife_children_get( struct treeoflife *t );
-void treeoflife_register_cb(struct treeoflife *t, treeoflife_treemsg_h *cb);
-void treeoflife_msg_recv( struct treeoflife *t , struct odict *o);
+typedef void (treeoflife_tunnel_h)( struct treeoflife *t
+								  , struct mbuf *mb);
+
+struct treeoflife_dht_item {
+	struct le le;
+	uint8_t key[KEY_LENGTH];
+	uint8_t binlen;
+	uint8_t binrep[ROUTE_LENGTH];
+	bool searching;
+	struct tmr tmr;
+	/* X:TODO in the future, we should also store signing data */
+};
+
+struct treeoflife_peer {
+	struct le le;
+	struct sa sa;
+	struct treeoflife_node *tn;
+	struct tmr tmr;
+	bool lock;
+};
+
+struct treeoflife_zone {
+	struct treeoflife_node *parent;
+	struct list children;
+	uint8_t root[KEY_LENGTH];
+	uint32_t height;
+
+	uint8_t binlen;
+	uint8_t binrep[ROUTE_LENGTH];
+};
+
+struct treeoflife {
+	struct tmr tmr;
+	struct tmr tmr_maintain;
+
+	uint8_t selfkey[KEY_LENGTH];
+
+	struct treeoflife_zone zone[ZONE_COUNT];
+
+	treeoflife_treemsg_h *cb;
+	treeoflife_tunnel_h *tun_cb;
+
+	uint64_t children_ts;
+	uint64_t maintain_ts;
+
+	struct list peers;
+
+	struct list dht_items;
+};
+
+struct treeoflife_node {
+	struct le le[ZONE_COUNT];
+	struct treeoflife *tree;
+	uint8_t key[KEY_LENGTH];
+	struct treeoflife_peer *peer;
+
+	uint8_t binlen;
+	uint8_t binrep[ROUTE_LENGTH];
+};
+
+int treeoflife_init( struct treeoflife **treeoflifep, uint8_t public_key[KEY_LENGTH] );
 int treeoflife_debug(struct re_printf *pf, const struct treeoflife *t);
-uint32_t treeoflife_get_id( struct treeoflife *t );
+int treeoflife_dht_debug(struct re_printf *pf, const struct treeoflife *t);
+
+void treeoflife_msg_recv( struct treeoflife *t, struct treeoflife_peer *peer, struct mbuf *mb, uint16_t weight );
+void treeoflife_register_cb( struct treeoflife *t, treeoflife_treemsg_h *cb);
+void treeoflife_register_tuncb( struct treeoflife *t, treeoflife_tunnel_h *cb);
+
+bool treeoflife_search( struct treeoflife *t
+					  , uint8_t search_key[KEY_LENGTH]
+					  , uint8_t *binlen
+					  , uint8_t binrep[ROUTE_LENGTH] );
+
+struct treeoflife_peer *treeoflife_route_to_peer( struct treeoflife *t
+												, uint8_t routelen
+												, uint8_t route[ROUTE_LENGTH] );
+
+int treeoflife_peer_find_or_new( struct treeoflife_peer **pp
+							   , struct treeoflife *t
+							   , const struct sa *sa
+							   , bool is_locked );
 
 /*
  * Modules
@@ -895,6 +967,9 @@ struct mrpinger *everip_mrpinger(void);
 struct commands *everip_commands(void);
 struct caengine *everip_caengine(void);
 struct conduits *everip_conduits(void);
+struct treeoflife *everip_treeoflife(void);
+
+void everip_udpport_set(uint16_t port);
 
 #ifdef __cplusplus
 }
