@@ -285,6 +285,45 @@ instant_hit:
 	return NULL;
 }
 
+static void treeoflife_dht_add_or_update( struct treeoflife *t
+										, uint8_t dhtkey[KEY_LENGTH]
+										, uint8_t binlen
+										, uint8_t binrep[ROUTE_LENGTH]
+										, bool searching)
+{
+	struct le *le;
+	struct treeoflife_dht_item *dhti = NULL;
+
+    LIST_FOREACH(&t->dht_items, le) {
+        dhti = le->data;
+        if (!memcmp(dhti->key, dhtkey, KEY_LENGTH)) {
+        	break;
+        } else {
+        	dhti = NULL;
+        }
+	}
+
+	if (!dhti) {/* create a new entry */
+		dhti = mem_zalloc(sizeof(*dhti), treeoflife_dht_item_destructor);
+		if (!dhti)
+			return;
+		tmr_init(&dhti->tmr);
+		list_append(&t->dht_items, &dhti->le, dhti);
+	}
+
+	if (dhti) {
+    	/* we have it, so update*/
+    	dhti->binlen = binlen;
+    	memcpy(dhti->binrep, binrep, ROUTE_LENGTH);
+    	memcpy(dhti->key, dhtkey, KEY_LENGTH);
+    	dhti->searching = searching;
+    	/* only lives for 10 minutes */
+    	tmr_start(&dhti->tmr, (searching ? 5000 : 1000 * 60 * 10), treeoflife_dht_item_tmr, dhti);
+	}
+
+	return;
+}
+
 static void treeoflife_dht_search_or_notify( struct treeoflife *t
 										   , struct treeoflife_zone *z
 										   , uint8_t dokey[KEY_LENGTH]
@@ -578,7 +617,8 @@ void treeoflife_msg_recv( struct treeoflife *t
 		treeoflife_children_notify(t, zone);
 
 		return;
-	} else if (type == (TYPE_BASE+2) || type == (TYPE_BASE+3)) { /* DHT STORE & RETRIEVE */
+	} else if (type == (TYPE_BASE+2) || type == (TYPE_BASE+3) || type == (TYPE_BASE+4)) {
+		/* DHT STORE / RETRIEVE ANSWER */
 		if (mbuf_get_left(mb) < 2 + (ROUTE_LENGTH*2)) {
 			goto err;
 		}
@@ -603,6 +643,23 @@ void treeoflife_msg_recv( struct treeoflife *t
 			 , t->zone[0].binrep
 			 , arch_max(dst_binlen, t->zone[0].binlen));
 
+	    if (type == (TYPE_BASE+4)) {
+			uint8_t ans_binlen = mbuf_read_u8(mb);
+			uint8_t ans_binrep[ROUTE_LENGTH];
+			mbuf_read_mem(mb, ans_binrep, ROUTE_LENGTH);
+
+		    br.l = ans_binlen;
+		    br.d = (uint8_t *)ans_binrep;
+		    debug("ANSWER:BINREP[%u][%H]\n", ans_binlen, _util_print_debug, &br);
+
+		    if (t->zone[0].binlen == dst_binlen
+		    	&& 0 == _diff) {
+		    	return; /* cool, we end here !*/
+		    }
+			goto dht_redirect;
+		    return; /* UNREACHABLE */
+	    }
+
 	    LIST_FOREACH(&t->dht_items, le) {
 	        dhti = le->data;
 	        if (!memcmp(dhti->key, dhtkey, KEY_LENGTH)) {
@@ -613,10 +670,11 @@ void treeoflife_msg_recv( struct treeoflife *t
 		}
 
 		if (type == (TYPE_BASE+3)) {
+			debug("TYPE_BASE+3 %p\n", dhti);
 			if (dhti) {
 				/* cool, we have what you are looking for! */
 				mb_clone = mbuf_alloc(272);
-
+				mbuf_set_pos(mb_clone, 0);
 			    mbuf_write_u16(mb_clone, arch_htobe16((TYPE_BASE+4))); /* DHT ANSWER */
 			    mbuf_write_mem(mb_clone, t->selfkey, KEY_LENGTH);
 
@@ -637,7 +695,7 @@ void treeoflife_msg_recv( struct treeoflife *t
 			    if (dst_peer && t->cb) {
 					/* bombs away! */
 					mbuf_set_pos(mb_clone, 0);
-			    	t->cb(t, dst_peer, mb);
+			    	t->cb(t, dst_peer, mb_clone);
 			    }
 				mb_clone = mem_deref(mb_clone);
 			}
@@ -665,6 +723,8 @@ void treeoflife_msg_recv( struct treeoflife *t
 	    	&& 0 == _diff) {
 	    	return; /* cool, we end here !*/
 	    }
+
+dht_redirect:
 
 		debug("STILL NEED TO REDIRECT DHT\n");
 		dst_peer = treeoflife_route_to_peer(t, dst_binlen, dst_binrep);
@@ -716,6 +776,12 @@ void treeoflife_msg_recv( struct treeoflife *t
 
 	    /*debug("GOT DIFF OF %d\n", _diff);*/
 
+		treeoflife_dht_add_or_update( t
+									, sentkey
+									, src_binlen
+									, src_binrep
+									, false);
+
 
 	    if (t->zone[0].binlen == dst_binlen
 	    	&& 0 == _diff) {
@@ -724,6 +790,16 @@ void treeoflife_msg_recv( struct treeoflife *t
 	    }
 
 	    debug("NEED TO REDIRECT!\n");
+		dst_peer = treeoflife_route_to_peer(t, dst_binlen, dst_binrep);
+		if (!dst_peer) {
+			return;
+		}
+
+		/* bombs away! */
+		mbuf_set_pos(mb, pos_top);
+
+	    if (t->cb)
+	    	t->cb(t, dst_peer, mb);
 
 	    return;
 
