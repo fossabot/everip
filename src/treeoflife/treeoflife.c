@@ -113,27 +113,6 @@ static int slide_splice( uint8_t new_slide[ROUTE_LENGTH]
 	return 0;
 }
 
-static void treeoflife_node_destructor(void *data)
-{
-	struct treeoflife_node *tn = data;
-	tn->tree->children_ts = tmr_jiffies();
-	for (int j = 0; j < ZONE_COUNT; ++j) {
-		if (tn->tree->zone[j].parent == tn) {
-			tn->tree->zone[j].parent = NULL;
-			tn->tree->zone[j].height = 0;
-			memcpy(tn->tree->zone[j].root, tn->tree->selfkey, KEY_LENGTH);
-		}
-	}
-	for (int i = 0; i < ZONE_COUNT; ++i)
-	{
-		list_unlink(&tn->le[i]);
-	}
-	if (tn->peer) {
-		tn->peer->tn = NULL;
-	}
-}
-
-
 static void treeoflife_dht_item_tmr(void *data)
 {
 	struct treeoflife_dht_item *dhti = data;
@@ -144,6 +123,51 @@ static void treeoflife_dht_item_destructor(void *data)
 	struct treeoflife_dht_item *dhti = data;
 	tmr_cancel(&dhti->tmr);
 	list_unlink(&dhti->le);
+}
+
+static struct treeoflife_dht_item *treeoflife_dht_find( struct treeoflife *t
+													  , uint8_t search_key[KEY_LENGTH] )
+{
+	struct le *le;
+    struct treeoflife_dht_item *dhti = NULL;
+
+    LIST_FOREACH(&t->dht_items, le) {
+        dhti = le->data;
+        if (!memcmp(dhti->key, search_key, KEY_LENGTH)) {
+        	return dhti;
+        }
+    }
+    return NULL;
+}
+
+static void treeoflife_node_destructor(void *data)
+{
+	struct treeoflife_node *tn = data;
+	struct treeoflife_dht_item *dhti = NULL;
+	tn->tree->children_ts = tmr_jiffies();
+
+	for (int j = 0; j < ZONE_COUNT; ++j) {
+		if (tn->tree->zone[j].parent == tn) {
+			tn->tree->zone[j].parent = NULL;
+			tn->tree->zone[j].height = 0;
+			memcpy(tn->tree->zone[j].root, tn->tree->selfkey, KEY_LENGTH);
+
+			/* flush dht table */
+			list_flush(&tn->tree->dht_items);
+		} else {
+			dhti = treeoflife_dht_find(tn->tree, tn->key);
+			if (dhti) {
+				dhti = mem_deref(dhti);
+			}
+		}
+	}
+	for (int i = 0; i < ZONE_COUNT; ++i)
+	{
+		list_unlink(&tn->le[i]);
+	}
+	if (tn->peer) {
+		tn->peer->tn = NULL;
+	}
 }
 
 
@@ -187,19 +211,12 @@ bool treeoflife_search( struct treeoflife *t
 	}
 
 	/* next check dht */
-    LIST_FOREACH(&t->dht_items, le) {
-        dhti = le->data;
-        if (!memcmp(dhti->key, search_key, KEY_LENGTH)) {
-        	if (!dhti->searching) {
-	        	*binlen = dhti->binlen;
-	        	memcpy(binrep, dhti->binrep, (((dhti->binlen + 7) & ~0x07)>>3) );
-	        	return true;
-        	} else {
-        		break;
-        	}
-        } else {
-        	dhti = NULL;
-        }
+	dhti = treeoflife_dht_find(t, search_key);
+
+	if (dhti && !dhti->searching) {
+    	*binlen = dhti->binlen;
+    	memcpy(binrep, dhti->binrep, (((dhti->binlen + 7) & ~0x07)>>3) );
+    	return true;
 	}
 
 	if (!dhti) {
@@ -294,14 +311,7 @@ static void treeoflife_dht_add_or_update( struct treeoflife *t
 	struct le *le;
 	struct treeoflife_dht_item *dhti = NULL;
 
-    LIST_FOREACH(&t->dht_items, le) {
-        dhti = le->data;
-        if (!memcmp(dhti->key, dhtkey, KEY_LENGTH)) {
-        	break;
-        } else {
-        	dhti = NULL;
-        }
-	}
+	dhti = treeoflife_dht_find(t, dhtkey);
 
 	if (!dhti) {/* create a new entry */
 		dhti = mem_zalloc(sizeof(*dhti), treeoflife_dht_item_destructor);
@@ -660,14 +670,7 @@ void treeoflife_msg_recv( struct treeoflife *t
 		    return; /* UNREACHABLE */
 	    }
 
-	    LIST_FOREACH(&t->dht_items, le) {
-	        dhti = le->data;
-	        if (!memcmp(dhti->key, dhtkey, KEY_LENGTH)) {
-	        	break;
-	        } else {
-	        	dhti = NULL;
-	        }
-		}
+	    dhti = treeoflife_dht_find(t, dhtkey);
 
 		if (type == (TYPE_BASE+3)) {
 			debug("TYPE_BASE+3 %p\n", dhti);
