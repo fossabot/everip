@@ -37,6 +37,10 @@ static struct csock *udp_handle_incoming( struct csock *csock
 	struct csock_addr *csaddr = (struct csock_addr *) mbuf_buf(mb);
 
 	if (csaddr->flags & CSOCK_ADDR_BCAST) {
+		return NULL; /* not available on UDP */
+	}
+
+	if (csaddr->flags & CSOCK_ADDR_BCAST) {
 		sa_set_str(&bcast, "255.255.255.255", udp_c->port);
 		dst = &bcast;
 	} else {
