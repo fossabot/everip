@@ -90,13 +90,14 @@ static struct csock *eth_handle_incoming( struct csock *csock
 
 	mbuf_set_pos(mb, pfix);
 
-	/*error("[ETH:SEND] %w\n", mbuf_buf(mb), mbuf_get_left(mb));*/
-
+/*	error("[ETH:SEND][%s] %w\n", eth_c->ifname, mbuf_buf(mb), mbuf_get_left(mb));
+*/
     n = write( eth_c->fd
-    		 , mbuf_buf(mb)
-    		 , mbuf_get_left(mb));
+		    		 , mbuf_buf(mb)
+		    		 , mbuf_get_left(mb));
 
 	if (n < 0) {
+		error("ERR WRITING OUT;\n");
 		err = errno;
 
 		if (EAGAIN == err)
@@ -210,8 +211,7 @@ static void eth_c_destructor(void *data)
 
 	eth_c->bptr = mem_deref(eth_c->bptr);
 
-	if (eth_c->fd > 0) {
-		/* clear socks */
+	if (eth_c->fd > 0) { /* clear socks */
 		fd_close(eth_c->fd);
 		(void)close(eth_c->fd);
 	}
@@ -314,13 +314,13 @@ static int register_eth_conduit( const char ifname[IFNAMSIZ]
     	goto out;
     }
 
-	err = fd_listen( eth_c->fd
-		           , FD_READ
-		           , _eth_read_handler
-		           , eth_c);
-	if (err) {
-        goto out;
-	}
+		err = fd_listen( eth_c->fd
+				           , FD_READ
+				           , _eth_read_handler
+				           , eth_c);
+		if (err) {
+	        goto out;
+		}
 
 	strncpy((char *)eth_c->ifname, ifname, IFNAMSIZ);
 
@@ -355,7 +355,7 @@ static bool _if_handler( const char *ifname
 		/*error("%s is not an ethernet if! [%u]\n", ifname, err);*/
 		return false;
 	}
-	
+
 	register_eth_conduit(ifname, eth_m);
 	return false;
 }
