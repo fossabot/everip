@@ -169,8 +169,9 @@ int conduits_debug(struct re_printf *pf, const struct conduits *conduits)
     LIST_FOREACH(&conduits->allpeers, le) {
         p = le->data;
         err  = re_hprintf( pf
-        				 , "    [%w] STATE[%d] IN[%llu] OUT[%llu]\n"
+        				 , "    [%w @ %s] STATE[%d] IN[%llu] OUT[%llu]\n"
         				 , p->caes->remote_ip6, 16
+                 , p->conduit->name ? p->conduit->name : "?"
         				 , p->state
         				 , p->bytes_in, p->bytes_out);
         /*err  = re_hprintf(pf, "\tSTATE = %s\n", );*/

@@ -276,3 +276,8 @@ void everip_udpport_set(uint16_t port)
 {
     everip.udp_port = port;
 }
+
+uint16_t everip_udpport_get(void)
+{
+    return everip.udp_port;
+}

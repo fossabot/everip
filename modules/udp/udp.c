@@ -110,7 +110,7 @@ static int module_init(void)
 	if (!udp_c)
 		return ENOMEM;
 
-	udp_c->port = 3456;
+	udp_c->port = everip_udpport_get();
 
 	(void)sa_set_str(&laddr, "0.0.0.0", udp_c->port);
 

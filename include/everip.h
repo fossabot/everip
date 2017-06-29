@@ -976,6 +976,7 @@ struct conduits *everip_conduits(void);
 struct treeoflife *everip_treeoflife(void);
 
 void everip_udpport_set(uint16_t port);
+uint16_t everip_udpport_get(void);
 
 #ifdef __cplusplus
 }
