@@ -164,16 +164,14 @@ enum {
     BMASK = (BSZ - 1)
 };
 
+static unsigned char BCMASK[] = {128, 64, 32, 16, 8, 4, 2, 1};
+#define i2b(i) BCMASK[i%8]
+
 #define BITSTOBYTES(bits) ((((bits) + 7) & ~0x07)>>3)
 
 static inline uint32_t i2o(uint32_t i)
 {
     return i / BSZ;
-}
-
-static inline uint8_t i2b(uint32_t i)
-{
-    return (uint8_t)1<<(i & BMASK);
 }
 
 static inline bool b_val(const uint8_t *bv, uint32_t i)
