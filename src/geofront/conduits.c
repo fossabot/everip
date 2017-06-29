@@ -402,7 +402,7 @@ struct conduit *conduit_find( const struct conduits *conduits
 {
 	struct le *le;
 
-	if (!conduits || !conduit)
+	if (!conduits || !name)
 		return NULL;
 
 	for (le = conduits->condl.head; le; le = le->next) {

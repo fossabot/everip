@@ -543,6 +543,8 @@ int caengine_keys_tostr(char **outp, uint8_t key[32]);
 int caengine_address_validity(const uint8_t address[16]);
 int caengine_address_frompubkey(uint8_t out[16], const uint8_t in[32]);
 
+int caengine_debug(struct re_printf *pf, struct caengine *c);
+
 /*
  * Pinger
  */

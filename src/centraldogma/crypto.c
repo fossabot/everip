@@ -87,6 +87,19 @@ static inline void _key_pub_tostr(uint8_t output[65], uint8_t privateKey[32])
 }
 #endif
 
+
+int caengine_debug(struct re_printf *pf, struct caengine *c)
+{
+  int err;
+  if (!c) return 0;
+
+  err  = re_hprintf(pf, "[Crypto-Authentication (CA) Engine]\n");
+  err  = re_hprintf(pf, "■ PublicKey: %W\n", &c->my_pubkey, 32);
+
+  return err;
+
+}
+
 static inline void _calc_sharedsecret( uint8_t out_secret[32]
                                      , uint8_t local_prvkey[32]
                                      , uint8_t remote_pubkey[32]

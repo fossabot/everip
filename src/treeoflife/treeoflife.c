@@ -1322,7 +1322,7 @@ int treeoflife_init( struct treeoflife **treeoflifep, uint8_t public_key[KEY_LEN
 
 void treeoflife_peer_cleanup(struct treeoflife *t, struct treeoflife_peer *p)
 {
-  if (!t || !p || p->tn->tree != t)
+  if (!t || !p || (p->tn && p->tn->tree != t))
     return;
   p->tn = mem_deref(p->tn);
 }

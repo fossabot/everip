@@ -347,6 +347,11 @@ static int cmd_treeoflife_dht_debug(struct re_printf *pf, void *unused)
 	return treeoflife_dht_debug(pf, everip_treeoflife());
 }
 
+static int cmd_caengine_debug(struct re_printf *pf, void *unused)
+{
+	(void)unused;
+	return caengine_debug(pf, everip_caengine());
+}
 
 static const struct cmd debugcmdv[] = {
 {"main",     0,       0, "Main loop debug",          re_debug             },
@@ -359,6 +364,7 @@ static const struct cmd debugcmdv[] = {
 {"peers", 'p',      0, "Peers and Conduits",            cmd_conduits_debug },
 {"tree", 't',      0, "Routing Tree Information",            cmd_treeoflife_debug },
 {"dht", 'd',      0, "DHT Database",            cmd_treeoflife_dht_debug },
+{"crypto", 'c',      0, "Crypto-Authentication (CA) Engine",            cmd_caengine_debug },
 
 };
 
