@@ -182,8 +182,9 @@ loop:
     return 0;
 }
 
-static int stack_linf_diff(uint8_t left[ROUTE_LENGTH], uint8_t right[ROUTE_LENGTH])
+static int stack_linf_diff(uint8_t left[ROUTE_LENGTH], uint8_t right[ROUTE_LENGTH], uint8_t limit)
 {
+    int i = 0;
     int score = 0;
     int lval = 0;
     int rval = 0;
@@ -199,13 +200,14 @@ static int stack_linf_diff(uint8_t left[ROUTE_LENGTH], uint8_t right[ROUTE_LENGT
     lval = stack_step(&lneedle);
     rval = stack_step(&rneedle);
     score += abs(lval-rval);
-
+    if (++i >= limit) return score;
     while (!lneedle.end && !rneedle.end ) {
         lval = stack_step(&lneedle);
         rval = stack_step(&rneedle);
         if (!lval || !rval) break;
         /*debug("lval = %d; rval = %d\n", lval, rval);*/
         score += abs(lval-rval);
+        if (++i >= limit) break;
     }
     return score;
 }
@@ -326,7 +328,7 @@ static void treeoflife_dht_item_destructor(void *data)
 }
 
 static struct treeoflife_dht_item *treeoflife_dht_find( struct treeoflife *t
-                            , uint8_t search_key[KEY_LENGTH] )
+                                                      , uint8_t search_key[KEY_LENGTH] )
 {
   struct le *le;
     struct treeoflife_dht_item *dhti = NULL;
@@ -350,9 +352,11 @@ static void treeoflife_node_destructor(void *data)
     if (tn->tree->zone[j].parent == tn) {
       tn->tree->zone[j].parent = NULL;
       tn->tree->zone[j].height = 0;
+      /* judy */
       /*slide_compress(0, tn->tree->zone[j].binrep, &tn->tree->zone[j].binlen);*/
-      memset(tn->tree->zone[j].binrep, 0, ROUTE_LENGTH);
-      memcpy(tn->tree->zone[j].root, tn->tree->selfkey, KEY_LENGTH);
+      //tn->tree->zone[j].binrep
+      //memset(tn->tree->zone[j].binrep, 0, ROUTE_LENGTH);
+      //memcpy(tn->tree->zone[j].root, tn->tree->selfkey, KEY_LENGTH);
 
       /* flush dht table */
       list_flush(&tn->tree->dht_items);
@@ -374,20 +378,26 @@ static void treeoflife_node_destructor(void *data)
 
 
 bool treeoflife_search( struct treeoflife *t
-            , uint8_t search_key[KEY_LENGTH]
-            , uint8_t *binlen
-            , uint8_t *binrep/*[ROUTE_LENGTH]*/
-            , bool skip_dht)
+                      , uint8_t search_key[KEY_LENGTH]
+                      , uint8_t *binlen
+                      , uint8_t *binrep/*[ROUTE_LENGTH]*/
+                      , bool skip_dht )
 {
   struct le *le;
   struct treeoflife_zone *zone;
-    struct treeoflife_node *tn = NULL;
-    struct treeoflife_dht_item *dhti = NULL;
+  struct treeoflife_node *tn = NULL;
+  struct treeoflife_dht_item *dhti = NULL;
 
   if (!t)
     return false;
 
   /*debug("treeoflife_search\n");*/
+
+  if (!memcmp(search_key, t->selfkey, KEY_LENGTH)) {
+    *binlen = t->zone[0].binlen;
+    memcpy(binrep, t->zone[0].binrep, ROUTE_LENGTH);
+    return true;
+  }
 
   /* first, do a quick search to see if we match 1 hop chain network */
   for (int i = 0; i < ZONE_COUNT; ++i)
@@ -453,41 +463,42 @@ struct treeoflife_peer *treeoflife_route_to_peer( struct treeoflife *t
 
   int local_diff, parent_diff, temp_diff, chosen_diff;
 
-  for (int i = 0; i < ZONE_COUNT; ++i)
-  {
+  uint8_t local_limit;
+
+  for (int i = 0; i < ZONE_COUNT; ++i) {
     zone = &t->zone[i];
 
-    local_diff = stack_linf_diff(route, zone->binrep);
+    local_limit = stack_height_get(zone->binrep);
+    local_diff = stack_linf_diff(route, zone->binrep, local_limit);
 
-    debug("LOCAL DIFF = %d\n", local_diff);
+    debug("LOCAL DIFF = %d[LIMIT=%u]\n", local_diff, local_limit);
     if (zone->parent) { /* how about our parent? */
 
-      parent_diff = stack_linf_diff(route, zone->parent->binrep);
+      parent_diff = stack_linf_diff(route, zone->parent->binrep, local_limit);
 
       debug("PARENT DIFF = %d\n", parent_diff);
       if (parent_diff < local_diff) {
-            if (!tn_chosen || parent_diff < chosen_diff) {
+            if (!tn_chosen || parent_diff > chosen_diff) {
               tn_chosen = zone->parent;
               chosen_diff = parent_diff;
             }
       }
     }
 
-      LIST_FOREACH(&t->zone[i].children, le) {
-          tn = le->data;
+    LIST_FOREACH(&t->zone[i].children, le) {
+      tn = le->data;
 
-      temp_diff = stack_linf_diff(route, tn->binrep);
+      temp_diff = stack_linf_diff(route, tn->binrep, local_limit);
       debug("TEMP DIFF = %d\n", temp_diff);
       if (temp_diff < local_diff) {
-            if (!tn_chosen || temp_diff < chosen_diff) {
+            if (!tn_chosen || temp_diff > chosen_diff) {
               tn_chosen = tn;
               chosen_diff = temp_diff;
             }
       }
-      }
+    }
   }
 
-/*instant_hit:*/
   if (tn_chosen && tn_chosen->peer) {
     return tn_chosen->peer;
   }
@@ -537,7 +548,7 @@ static void treeoflife_dht_search_or_notify( struct treeoflife *t
 
   size_t pos;
 
-  debug("treeoflife_dht_notify\n");
+  debug("treeoflife_dht_notify %s\n", do_search ? "SEARCH" : "NOTIFY");
 
   /* copy the last 64 bits of the hash and then swap the order */
 #if 0
@@ -700,17 +711,10 @@ void treeoflife_msg_recv( struct treeoflife *t
   debug("GOT TYPE = %u from %W\n", type, sentkey, KEY_LENGTH);
 
   if (!peer->tn) {
-    /* search */
 
-#if 0 /* PEERS */
-    LIST_FOREACH(&t->peers, le) {
-      _p = le->data;
-      if (!_p->tn) continue;
-      if (0 == memcmp(_p->tn->key, sentkey, KEY_LENGTH)) {
-        return; /* could be an attack? */
-      }
-    }
-#endif
+    if (type != (TYPE_BASE+0) && type != (TYPE_BASE+1))
+      return;
+    /* search */
 
     peer->tn = mem_zalloc(sizeof(*tn), treeoflife_node_destructor);
     if (!peer->tn) {
@@ -853,47 +857,46 @@ void treeoflife_msg_recv( struct treeoflife *t
     uint8_t dhtkey[ROUTE_LENGTH];
     mbuf_read_mem(mb, dhtkey, KEY_LENGTH);
 
-    debug("GOT DHT STORE/RETRIEVE REQUEST FOR [%W];\n", dhtkey, KEY_LENGTH);
-      debug("DST:BINREP[%u][%H]\n", dst_binlen, stack_debug, dst_binrep);
+    debug("GOT DHT %s FOR [%W];\n", (type == (TYPE_BASE+2)?"STORE":(type == (TYPE_BASE+3)?"RETRIEVE":"ANSWER")), dhtkey, KEY_LENGTH);
+    debug("DST:BINREP[%u][%H]\n", dst_binlen, stack_debug, dst_binrep);
 
-      int _diff = memcmp(dst_binrep
-       , t->zone[0].binrep
-       , max(dst_binlen, t->zone[0].binlen));
+    dhti = treeoflife_dht_find(t, dhtkey);
+    debug("STORED? %p\n", dhti);
 
-      dhti = treeoflife_dht_find(t, dhtkey);
-
-      if (type == (TYPE_BASE+4)) {
+    if (type == (TYPE_BASE+4)) {
       uint8_t ans_binlen = mbuf_read_u8(mb);
       uint8_t ans_binrep[ROUTE_LENGTH];
       mbuf_read_mem(mb, ans_binrep, ROUTE_LENGTH);
 
-        debug("ANSWER:BINREP[%u][%H]\n", ans_binlen, stack_debug, ans_binrep);
+      debug("ANSWER:BINREP[%u][%H]\n", ans_binlen, stack_debug, ans_binrep);
 
-      if (dhti) {
-            /* we have it, so update*/
-            dhti->binlen = ans_binlen;
-            memcpy(dhti->binrep, ans_binrep, ROUTE_LENGTH);
-            memcpy(dhti->key, dhtkey, KEY_LENGTH);
-            dhti->searching = false;
-            /* only lives for 5 minutes */
-            tmr_start(&dhti->tmr, 1000 * 60 * 5, treeoflife_dht_item_tmr, dhti);
+      if (!dhti) {/* create a new entry */
+        dhti = mem_zalloc(sizeof(*dhti), treeoflife_dht_item_destructor);
+        if (!dhti)
+          goto err;
+        tmr_init(&dhti->tmr);
+        list_append(&t->dht_items, &dhti->le, dhti);
       }
-
+      /* we have it, so update*/
+      dhti->binlen = ans_binlen;
+      memcpy(dhti->binrep, ans_binrep, ROUTE_LENGTH);
+      memcpy(dhti->key, dhtkey, KEY_LENGTH);
+      dhti->searching = false;
+      /* only lives for 5 minutes */
+      tmr_start(&dhti->tmr, 1000 * 60 * 5, treeoflife_dht_item_tmr, dhti);
       goto dht_redirect_or_stay;
-        return; /* UNREACHABLE */
-      }
-
-    if (type == (TYPE_BASE+3)) {
+      return; /* UNREACHABLE */
+    } else if (type == (TYPE_BASE+3)) {
       debug("TYPE_BASE+3 %p\n", dhti);
       uint8_t search_binlen = 0;
       uint8_t search_binrep[ROUTE_LENGTH];
-      (void)treeoflife_search( t
+      bool search_found = treeoflife_search( t
                   , dhtkey
                   , &search_binlen
                   , search_binrep
                   , true);
 
-      if (dhti || search_binlen) {
+      if (dhti || search_found) {
         /* cool, we have what you are looking for! */
         mb_clone = tol_mbuf_alloc();
 
@@ -919,7 +922,7 @@ void treeoflife_msg_recv( struct treeoflife *t
         mbuf_write_u8(mb_clone, t->zone[0].binlen);
         mbuf_write_mem(mb_clone, t->zone[0].binrep, ROUTE_LENGTH);
 
-        if (search_binlen) { /* peermap is > than dht */
+        if (search_found) { /* peermap is > than dht */
           mbuf_write_mem(mb_clone, dhtkey, KEY_LENGTH);
           mbuf_write_u8(mb_clone, search_binlen);
           mbuf_write_mem(mb_clone, search_binrep, ROUTE_LENGTH);
@@ -962,12 +965,13 @@ void treeoflife_msg_recv( struct treeoflife *t
 
 dht_redirect_or_stay:
 
+#if 0
       if (t->zone[0].binlen == dst_binlen
         && 0 == _diff) {
         return; /* cool, we end here !*/
       }
+#endif
 
-    debug("STILL NEED TO REDIRECT DHT\n");
     dst_peer = treeoflife_route_to_peer(t, dst_binlen, dst_binrep);
 
     if (!dst_peer) {
@@ -1021,18 +1025,9 @@ dht_redirect_or_stay:
                   , false);
 
 
-      if (t->zone[0].binlen == dst_binlen
-        && 0 == memcmp(dst_binrep
-       , t->zone[0].binrep
-       , max(dst_binlen, t->zone[0].binlen))) {
-        /*debug("HEY THIS IS US!\n");*/
-        goto process_pkt;
-      }
-
-      debug("NEED TO REDIRECT!\n");
     dst_peer = treeoflife_route_to_peer(t, dst_binlen, dst_binrep);
     if (!dst_peer) {
-      return;
+      goto process_pkt;
     }
 
     /* bombs away! */
@@ -1266,6 +1261,8 @@ int treeoflife_init( struct treeoflife **treeoflifep, uint8_t public_key[KEY_LEN
   {
     list_init(&t->zone[i].children);
     memcpy(t->zone[i].root, public_key, KEY_LENGTH);
+    /* judy */
+    t->zone[i].binlen = 1;
     memset(t->zone[i].binrep, 0, ROUTE_LENGTH);
     /*slide_compress(0, t->zone[i].binrep, &t->zone[i].binlen);*/
   }
