@@ -93,9 +93,9 @@ static inline void _calc_sharedsecret( uint8_t out_secret[32]
                                      , uint8_t pwordhash[32])
 {
     if (pwordhash == NULL) {
-        crypto_box_curve25519xsalsa20poly1305_beforenm( out_secret
-                                                      , remote_pubkey
-                                                      , local_prvkey);
+        (void)crypto_box_curve25519xsalsa20poly1305_beforenm( out_secret
+                                                            , remote_pubkey
+                                                            , local_prvkey);
     } else {
         union {
             struct {
@@ -105,7 +105,7 @@ static inline void _calc_sharedsecret( uint8_t out_secret[32]
             uint8_t b[64];
         } b;
 
-        crypto_scalarmult_curve25519(b.c.k, local_prvkey, remote_pubkey);
+        (void)crypto_scalarmult_curve25519(b.c.k, local_prvkey, remote_pubkey);
         memcpy(b.c.p, pwordhash, 32);
         crypto_hash_sha256(out_secret, b.b, 64);
     }
