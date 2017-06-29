@@ -174,7 +174,7 @@ int tmldogma_init( struct tmldogma **tmldogmap
 {
 	struct tmldogma *t;
 
-	if (!tmldogmap || !eventd)
+	if (!tmldogmap)
 		return EINVAL;
 
 	t = mem_zalloc(sizeof(*t), tmldogma_destructor);
@@ -187,7 +187,7 @@ int tmldogma_init( struct tmldogma **tmldogmap
 	t->tunadapt_cs.send = _from_tunadapt;
 
 	t->eventd_cs.send = _from_eventd;
-	magi_eventdriver_register_core(eventd, &t->eventd_cs, EVD_STAR_SENDMSG );
+	/*magi_eventdriver_register_core(eventd, &t->eventd_cs, EVD_STAR_SENDMSG );*/
 
 	*tmldogmap = t;
 

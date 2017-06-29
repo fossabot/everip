@@ -4,9 +4,9 @@ SRCS	+= geofront/conduits.c
 
 #central dogma
 SRCS	+= centraldogma/crypto.c
-SRCS	+= centraldogma/relaymap.c
-SRCS	+= centraldogma/manager.c
-SRCS	+= centraldogma/cmdcenter.c
+#SRCS	+= centraldogma/relaymap.c
+#SRCS	+= centraldogma/manager.c
+#SRCS	+= centraldogma/cmdcenter.c
 
 #terminal dogma
 SRCS	+= terminaldogma/terminaldogma.c
@@ -21,8 +21,8 @@ SRCS	+= terminaldogma/tun_linux.c
 endif
 
 #magi (pathfinder)
-SRCS	+= magi/eventdriver.c
-SRCS	+= magi/starfinder.c
+#SRCS	+= magi/eventdriver.c
+#SRCS	+= magi/starfinder.c
 
 #misato (application)
 SRCS	+= misato/everip.c

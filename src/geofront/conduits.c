@@ -33,8 +33,12 @@ struct conduits {
 
 	struct csock eventd_cs;
 
-	struct cd_relaymap *relaymap;
-	struct cd_cmdcenter *cmdcenter;
+  struct csock tunif_cs;
+
+	/*struct cd_relaymap *relaymap;*/
+	/*struct cd_cmdcenter *cmdcenter;*/
+
+  struct treeoflife *treeoflife;
 
 	struct tmr interval_tmr;
 	struct tmr beacon_tmr;
@@ -43,42 +47,15 @@ struct conduits {
 
 };
 
-static void _send_ping(struct conduit_peer *p);
-
-static void _send_event_peer( struct conduit_peer *p
-	                        , uint32_t sf_id
-	                        , enum EVD_CORE ec )
-{
-
-	struct mbuf *mb = mbuf_alloc(512 + 8 + 64);
-	mbuf_set_end(mb, mb->size);
-	mb->pos = 512;
-
-	mbuf_write_u32(mb, ec);
-	mbuf_write_u32(mb, sf_id);
-
-	/* write-out peer */
-	mbuf_write_mem(mb, p->addr.ip6.bytes, 16);
-	mbuf_write_mem(mb, p->addr.key, 32);
-
-	mbuf_write_u64(mb, arch_htobe64( p->addr.path ));
-	mbuf_write_u32(mb, sf_id);
-	mbuf_write_u32(mb, arch_htobe32( p->addr.protover ));
-
-	mbuf_advance(mb, -(8 + 64));
-
-	/*debug("READOUT [%w]\n", mb->buf, mb->size);*/
-
-    csock_forward(&p->conduit->ctx->eventd_cs, mb);
-    mb = mem_deref(mb);
-}
-
 
 static void peer_destructor(void *data)
 {
 	struct conduit_peer *p = data;
 
-	_send_event_peer(p, 0xffffffff, EVD_CORE_PEER_GONE);
+	/*_send_event_peer(p, 0xffffffff, EVD_CORE_PEER_GONE);*/
+
+  treeoflife_peer_cleanup( everip_treeoflife()
+                         , (struct treeoflife_peer *)p);
 
 	p->caes = mem_deref(p->caes);
 	list_unlink(&p->le);
@@ -104,7 +81,7 @@ static void _interval_cb(void *arg)
 
 		if (p->addr.protover && now < p->lastmsg_ts + MSEC_PING_LAZY) {
 			if (p->state == CONDUIT_PEERSTATE_ESTABLISHED) {
-				_send_event_peer(p, 0xffffffff, EVD_CORE_PEER);
+				/*_send_event_peer(p, 0xffffffff, EVD_CORE_PEER);*/
 			}
 			return;
 		}
@@ -115,25 +92,20 @@ static void _interval_cb(void *arg)
 
         if (p->outside_initiation && now > p->lastmsg_ts + MSEC_PEER_FORGET) {
         	info("unresponsive peer [%w][%ums]\n", p->caes->remote_pubkey, 32, MSEC_PEER_FORGET);
-        	_send_event_peer(p, 0xffffffff, EVD_CORE_PEER_GONE);
+        	/*_send_event_peer(p, 0xffffffff, EVD_CORE_PEER_GONE);*/
         	p = mem_deref(p);
             return;
         }
 
         bool unresponsive = (now > p->lastmsg_ts + MSEC_PEER_UNRESPONSIVE);
         if (unresponsive) {
-            if (p->cnt_ping % 8) {
-                p->cnt_ping++;
-                return;
-            }
-
-            _send_event_peer(p, 0xffffffff, EVD_CORE_PEER_GONE);
             p->state = CONDUIT_PEERSTATE_UNRESPONSIVE;
+#if 0
             cd_relaymap_slot_setstate( (struct cd_relaymap_slot *)&p->relaymap_cs
             	                     , RELAYMAP_SLOT_STATE_DOWN);
+#endif
         }
 
-		_send_ping(p);
 	}
 
 	tmr_start( &c->interval_tmr, MSEC_PING_INTERVAL, _interval_cb, c);
@@ -221,6 +193,150 @@ int conduits_debug(struct re_printf *pf, const struct conduits *conduits)
     return err;
 }
 
+static void _tree_cb_send(struct conduit_peer *p, struct mbuf *mb)
+{
+
+  if (!p) return;
+
+  p->bytes_out += mbuf_get_left(mb);
+
+  /* encrypt */
+  ASSERT_TRUE(!caengine_session_encrypt(p->caes, mb));
+  ASSERT_TRUE(!(((uintptr_t)mb->buf) % 4) && "alignment fault");
+
+  /*re_printf("GOT ALL THE WAY HERE!\n%w\n", mbuf_buf(mb), mbuf_get_left(mb));*/
+
+  size_t out_pos = mb->pos;
+
+  csock_addr_cpycsa(mb, &p->csaddr);
+
+  /*re_printf("AND COPIED!\n");*/
+
+  mbuf_set_pos(mb, out_pos);
+
+  csock_forward(&p->conduit->csock, mb);
+}
+
+static struct csock *_from_terminaldogma( struct csock *csock
+                        , struct mbuf *mb )
+{
+  size_t top_pos = 0;
+  struct treeoflife_peer *dst_peer;
+  /*info("_from_terminaldogma\n");*/
+
+  struct conduits *c = container_of( csock
+                                   , struct conduits
+                                   , tunif_cs);
+
+  /* [PAYLOAD_TYPE][SENTKEY][HOP][SRC][DST] */
+
+  mbuf_advance(mb, 4);
+
+    struct _wire_ipv6_header *ihdr = \
+        (struct _wire_ipv6_header *)mbuf_buf(mb);
+
+  if (ihdr->dst[0] != 0xFC) {
+    return NULL; /* toss */
+  }
+
+    uint16_t next_header = ihdr->next_header;
+
+    uint8_t binlen;
+    uint8_t binrep[ROUTE_LENGTH];
+
+    memset(binrep, 0, ROUTE_LENGTH);
+
+  if (!treeoflife_search( c->treeoflife
+           , ihdr->dst+1
+           , &binlen
+           , binrep
+           , false)) {
+    return NULL;
+  }
+
+  debug("FOUND ROUTE FOR %W!\n[%u@%W]\n", ihdr->dst, KEY_LENGTH+1, binlen, binrep, ROUTE_LENGTH);
+
+  dst_peer = treeoflife_route_to_peer(c->treeoflife, binlen, binrep);
+
+  if (!dst_peer) {
+    debug("have route, but no one to send it to?\n");
+    return NULL;
+  }
+
+  /*debug("READY TO SEND!!!\n");*/
+
+  /*[TYPE(2)][KEY_LENGTH][DST_BINLEN(1)][DST_BINROUTE(ROUTE_LENGTH)][SRC_BINLEN(1)][SRC_BINROUTE(ROUTE_LENGTH)]*/
+
+  mbuf_advance(mb, WIRE_IPV6_HEADER_LENGTH - (2+KEY_LENGTH+1+ROUTE_LENGTH+1+ROUTE_LENGTH));
+    top_pos = mb->pos;
+    mbuf_write_u16(mb, arch_htobe16(next_header));
+    mbuf_write_mem(mb, c->treeoflife->selfkey, KEY_LENGTH);
+
+    /* DST */
+    mbuf_write_u8(mb, binlen);
+    mbuf_write_mem(mb, binrep, ROUTE_LENGTH);
+
+  /* SRC */
+    mbuf_write_u8(mb, c->treeoflife->zone[0].binlen);
+    mbuf_write_mem(mb, c->treeoflife->zone[0].binrep, ROUTE_LENGTH);
+    mbuf_set_pos(mb, top_pos);
+
+  /*debug("ATTEMPTING SEND: [%W];\n", mbuf_buf(mb), mbuf_get_left(mb));*/
+
+    if (c->treeoflife->cb)
+      c->treeoflife->cb(c->treeoflife, dst_peer, mb, c->treeoflife->cb_arg);
+
+  return NULL;
+}
+
+int conduits_connect_tunif(struct conduits *conduits, struct csock *csock)
+{
+  if (!conduits || !csock)
+    return EINVAL;
+
+  conduits->tunif_cs.send = _from_terminaldogma;
+  csock_flow( csock, &conduits->tunif_cs);
+
+  return 0;
+}
+
+static void _tree_cb( struct treeoflife *t
+                    , struct treeoflife_peer *peer
+                    , struct mbuf *mb
+                    , void *arg)
+{
+  struct le *le;
+  struct mbuf *mb_clone;
+
+  struct conduits *c = arg;
+  struct conduit_peer *p = container_of(peer, struct conduit_peer, tolpeer);
+
+  debug("_tree_cb\n");
+
+  if (!peer) {
+    /*debug("_tree_cb BROADCAST\n");*/
+    LIST_FOREACH(&c->allpeers, le) {
+      p = le->data;
+      mb_clone = mbuf_clone(mb);
+      debug("sending %u bytes to peer on %s\n", mbuf_get_left(mb_clone), p->conduit->name);
+      _tree_cb_send(p, mb_clone);
+      mb_clone = mem_deref(mb_clone);
+    }
+  } else {
+    debug("DIRECTLY sending %u bytes to peer on %s\n", mbuf_get_left(mb), p->conduit->name);
+    _tree_cb_send(p, mb);
+  }
+  return;
+}
+
+static void _tree_tun_cb( struct treeoflife *t
+                        , struct mbuf *mb
+                        , void *arg)
+{
+  struct conduits *c = arg;
+  csock_next(&c->tunif_cs, mb);
+}
+
 static void conduits_destructor(void *data)
 {
 	struct conduits *conduits = data;
@@ -232,13 +348,11 @@ static void conduits_destructor(void *data)
 }
 
 int conduits_init( struct conduits **conduitsp
-	             , struct cd_relaymap *relaymap
-	             , struct cd_cmdcenter *cmdcenter
-	             , struct magi_eventdriver *eventdriver )
+  	             , struct treeoflife *treeoflife )
 {
 	struct conduits *conduits;
 
-	if (!conduitsp || !relaymap)
+	if (!conduitsp)
 		return EINVAL;
 
 	conduits = mem_zalloc(sizeof(*conduits), conduits_destructor);
@@ -249,8 +363,11 @@ int conduits_init( struct conduits **conduitsp
 	list_init(&conduits->allpeers);
 	hash_alloc(&conduits->peers, 128);
 
-	conduits->relaymap = relaymap;
-	conduits->cmdcenter = cmdcenter;
+	conduits->treeoflife = treeoflife;
+	/*conduits->cmdcenter = cmdcenter;*/
+
+  treeoflife_register_cb(treeoflife, _tree_cb, conduits);
+  treeoflife_register_tuncb(treeoflife, _tree_tun_cb, conduits);
 
 	conduits->beacon.ver_be = arch_htobe32(EVERIP_VERSION_PROTOCOL);
 
@@ -273,9 +390,6 @@ int conduits_init( struct conduits **conduitsp
 
 	/* hook into events */
 	conduits->eventd_cs.send = _from_eventd;
-	magi_eventdriver_register_core( eventdriver
-								  , &conduits->eventd_cs
-								  , EVD_STAR_PEERS);
 
 	*conduitsp = conduits;
 
@@ -328,7 +442,7 @@ struct conduit_peer *conduits_peer_find( const struct conduits *conduits
 }
 
 
-
+#if 0
 static struct csock *_relaymap_send( struct csock *csock
 								   , struct mbuf *mb)
 {
@@ -360,104 +474,8 @@ static struct csock *_relaymap_send( struct csock *csock
 
 	return NULL;
 }
+#endif
 
-static void _send_ping_response(struct pl *_pl, uint32_t version, uint64_t ttl, void *userdata)
-{
-	struct conduit_peer *p = userdata;
-	/*debug("_send_ping_response\n");*/
-	if (!p) {
-		return;
-	}
-
-	if (!_pl) return; /* we failed... */
-
-	ASSERT_TRUE(version);
-
-	p->addr.protover = version;
-
-	if (p->state == CONDUIT_PEERSTATE_ESTABLISHED) {
-		_send_event_peer(p, 0xffffffff, EVD_CORE_PEER);
-	}
-
-	p->lastping_ts = tmr_jiffies();
-
-}
-
-static void _send_ping_build(uint32_t hashid, uint64_t cookie, void *userdata)
-{
-	struct conduit_peer *p = userdata;
-	/*debug("_send_ping_build\n");*/
-
-	if (!p)
-		return;
-
-
-	/* generate new mbuf and message */
-	struct mbuf *mb = mbuf_alloc(512);
-	mbuf_set_end(mb, 512);
-	mb->pos = 512 - 12;
-	mbuf_write_u32(mb, hashid);
-	mbuf_write_u64(mb, cookie);
-	mb->pos = 512 - 12;
-
-
-	bool key = false; /* ? */
-
-	/**/
-	mbuf_advance(mb, -(CTRL_HEADER_LENGTH + 8 + (key ? 32 : 0)));
-	size_t ctrlhead_pos = mb->pos;
-
-    mbuf_advance(mb, 2); /* skip checksum */
-    mbuf_write_u16(mb, (key ? CTRL_TYPE_PINGKEY_be : CTRL_TYPE_PING_be )); /* write new type */
-    mbuf_write_u32(mb, arch_htobe32((key ? 0x01234567 : 0x09f91102 ))); /* write new magic */
-    mbuf_write_u32(mb, arch_htobe32(EVERIP_VERSION_PROTOCOL)); /* write version */
-
-	if (key) { /* keyping */
-		mbuf_write_mem(mb, everip_caengine()->my_pubkey, 32);
-	}
-
-	/* calculate checksum... */
-    mbuf_set_pos(mb, ctrlhead_pos);
-    /*debug("CMD LENGTH == [%u]\n", mb->end - mb->pos);*/
-    mbuf_write_u16(mb, 0); /* reset for checksum */
-    mbuf_set_pos(mb, ctrlhead_pos);
-    mbuf_write_u16(mb, chksum_buf(mbuf_buf(mb), mbuf_get_left(mb)) );
-    mbuf_set_pos(mb, ctrlhead_pos);
-
-    /* slap-on a routeheader!! */
-    mbuf_advance(mb, -(SESS_WIREHEADER_LENGTH));
-    struct sess_wireheader *out_sess_wh = (struct sess_wireheader *)mbuf_buf(mb);
-    memset(out_sess_wh, 0, SESS_WIREHEADER_LENGTH);
-
-    _wireheader_setversion(&out_sess_wh->sh, 1); /* current version is 1 */
-    out_sess_wh->sh.label_be = arch_htobe64(p->addr.path);
-    out_sess_wh->flags |= SESS_WIREHEADER_flags_CTRLMSG;
-
-    /*BREAKPOINT;*/
-
-    cd_cmdcenter_sendcmd(p->conduit->ctx->cmdcenter, mb );
-
-    mb = mem_deref(mb);
-
-}
-
-static void _send_ping(struct conduit_peer *p)
-{
-	if (!p)
-		return;
-
-	debug("_send_ping\n");
-	p->cnt_ping++;
-
-	mrpinger_ping( everip_mrpinger()
-				 , 3000
-				 , _send_ping_response
-				 , _send_ping_build
-				 , p );
-
-	return;
-
-}
 
 static struct conduit_peer *
 conduit_peer_create( struct conduit *conduit
@@ -573,10 +591,12 @@ static void _conduits_process_endpoints( struct conduits *c
     		/* similar peers?? */
     		if (p->conduit == _p->conduit) {
     			/* update and destroy old peer */
+#if 0
 	            p->addr.path = _p->addr.path;
 	            p->relaymap_cs.adj = _p->relaymap_cs.adj;
 	            p->relaymap_cs.adj->adj = &p->relaymap_cs;
 	            _p->relaymap_cs.adj = NULL;
+#endif
 	            _p = mem_deref(_p);
 	            return;
     		}
@@ -588,7 +608,6 @@ static void _conduits_process_endpoints( struct conduits *c
 static struct csock *conduits_handle_incoming( struct csock *csock
 											 , struct mbuf *mb)
 {
-	int err = 0;
 
 	struct conduit *conduit = (struct conduit *)csock;
 
@@ -601,7 +620,6 @@ static struct csock *conduits_handle_incoming( struct csock *csock
 	if (mbuf_get_left(mb) == WIRE_BEACON_LENGTH) {
 		return conduits_handle_beacon(conduit, csaddr, mb);
 	}
-
 
 	struct conduit_peer *p = conduits_peer_find(conduit->ctx, csaddr);
 
@@ -618,11 +636,11 @@ static struct csock *conduits_handle_incoming( struct csock *csock
 	    uint8_t remote_pubkey[32];
 	    mbuf_set_pos(mb, pfix + (4 + 12 + 24));
 	    mbuf_read_mem(mb, remote_pubkey, 32);
-		debug("remote_pubkey = %w\n", remote_pubkey, 32);
-		p = conduit_peer_create( conduit
-							   , csaddr
-							   , remote_pubkey
-							   , true );
+  		debug("remote_pubkey = %w\n", remote_pubkey, 32);
+  		p = conduit_peer_create( conduit
+  							   , csaddr
+  							   , remote_pubkey
+  							   , true );
 
 		if (!p) {
 			return NULL;
@@ -634,6 +652,9 @@ static struct csock *conduits_handle_incoming( struct csock *csock
 			return NULL;
 		}
 
+    /* REGISTRATION */
+
+#if 0
 		p->relaymap_cs.send = _relaymap_send;
 
 		err = cd_relaymap_slot_add( &p->addr.path
@@ -643,6 +664,7 @@ static struct csock *conduits_handle_incoming( struct csock *csock
 			p = mem_deref(p);
 			return NULL;
 		}
+#endif
 
 	} else {
 		/* HAVE a PEER! */
@@ -667,35 +689,47 @@ static struct csock *conduits_handle_incoming( struct csock *csock
 
     if (p->state < CONDUIT_PEERSTATE_ESTABLISHED) {
         p->state = (enum CONDUIT_PEERSTATE)cae_state;
+#if 0
         cd_relaymap_slot_setstate((struct cd_relaymap_slot *)&p->relaymap_cs, RELAYMAP_SLOT_STATE_ISUP);
+#endif
 
         memcpy(p->addr.key, p->caes->remote_pubkey, 32);
         addr_prefix(&p->addr);
 
         if (cae_state == CAENGINE_STATE_ESTABLISHED) {
-            /*error("X:TODO update_endpoint(ep);\n");*/
             _conduits_process_endpoints(conduit->ctx, p);
         } else {
             if (mbuf_get_left(mb) < 8 || mbuf_buf(mb)[7] != 1) {
-                error("DROP: NO CAE?\n");
+                /*error("DROP: NO CAE?\n");*/
                 return 0;
-            } else {
+            }
+#if 0
+             else {
                 if ((p->cnt_ping + 1) % 7) {
                     _send_ping(p);
                 }
             }
+#endif
         }
     } else if (p->state == CONDUIT_PEERSTATE_UNRESPONSIVE
         && cae_state == CAENGINE_STATE_ESTABLISHED)
     {
         p->state = CONDUIT_PEERSTATE_ESTABLISHED;
+#if 0
         cd_relaymap_slot_setstate((struct cd_relaymap_slot *)&p->relaymap_cs, RELAYMAP_SLOT_STATE_ISUP);
+#endif
     } else {
         p->lastmsg_ts = tmr_jiffies();
     }
 
+    /* process packets */
 
-    return csock_next(&p->relaymap_cs, mb);
+    /*return csock_next(&p->relaymap_cs, mb);*/
+
+    treeoflife_msg_recv( conduit->ctx->treeoflife
+                       , (struct treeoflife_peer *)p
+                       , mb
+                       , 1);
 
 	return NULL;
 }
@@ -709,7 +743,6 @@ int conduits_peer_bootstrap( struct conduit *conduit
 						   , const char *login
 						   , const char *identifier )
 {
-	int err = 0;
 	struct conduit_peer *p;
 
 	if (!conduit || !c || !remote_pubkey)
@@ -731,6 +764,7 @@ int conduits_peer_bootstrap( struct conduit *conduit
 	/* set authentation as required */
 	caengine_session_setauth(p->caes, pword, login);
 
+#if 0
 	/* initiate flow between relaymap and peer */
 	p->relaymap_cs.send = _relaymap_send;
 	err = cd_relaymap_slot_add( &p->addr.path
@@ -743,6 +777,7 @@ int conduits_peer_bootstrap( struct conduit *conduit
 
 	/* send ping! */
 	_send_ping(p);
+#endif
 
 	return 0;
 }
