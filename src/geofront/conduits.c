@@ -397,8 +397,8 @@ int conduits_init( struct conduits **conduitsp
 }
 
 
-struct conduit *conduit_find(const struct conduits *conduits,
-		       const struct conduit *conduit)
+struct conduit *conduit_find( const struct conduits *conduits
+                  		      , const char *name )
 {
 	struct le *le;
 
@@ -407,11 +407,10 @@ struct conduit *conduit_find(const struct conduits *conduits,
 
 	for (le = conduits->condl.head; le; le = le->next) {
 		struct conduit *c = le->data;
-
-		if (c == conduit)
-			return c;
+    if (c && !strcmp((const char *)c->name, name)) {
+      return c;
+    }
 	}
-
 	return NULL;
 }
 

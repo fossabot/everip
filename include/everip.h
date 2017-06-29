@@ -301,8 +301,8 @@ struct magi_eventdriver;
 
 int conduits_init( struct conduits **conduitsp, struct treeoflife *treeoflife );
 int conduits_register(struct conduits *conduits, const char *name, const char *desc, struct csock *csock);
-struct conduit *conduit_find(const struct conduits *conduits,
-           const struct conduit *conduit);
+struct conduit *conduit_find( const struct conduits *conduits
+                            , const char *name );
 
 struct conduit_peer *conduits_peer_find( const struct conduits *conduits
                          , const struct csock_addr *csaddr );
