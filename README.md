@@ -1,5 +1,10 @@
 # EVER/IP(R)
-The EVER/IP Suite
+The Elastic Versatile Encrypted Relay for IP (EVER/IP) Networking Suite
+
+![EVER/IP Logo](https://raw.githubusercontent.com/connectfree/everip/master/everip_logo.png)
+
+## Frequently Asked Questions
+EVER/IP is a relatively new technology and you might have some questions about it. Head on over to our [FAQ Document](docs/FAQ.md) for more information.
 
 ## Layers
 
