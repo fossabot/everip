@@ -11,7 +11,9 @@ Fast-forward three decades, EVER/IP is the first kind of routing software that d
 
 Being entirely local information driven, there is no need for expensive ISPs and Providers, thus reducing the cost of communication for people and things alike.
 
-Thanks in part to the iPhone(r)<sup>(1)</sup> and other smartphones of its generation, the computing power that we have in our pocket is incredible. EVER/IP aims to unleash this power, bringing-down the cost of communications worldwide and beyond. Welcome to the MicroISP™ era.
+Thanks in part to the iPhone(r)<sup>(1)</sup> and other smartphones of its generation, the computing power that we have in our pocket is incredible. EVER/IP aims to unleash this power, bringing-down the cost of communications worldwide and beyond. 
+
+Microsoft helped take us from the mainframe era with micro-software. We aim to take humanity into an era from Internet eXchanges to Micro Internet eXchanges (MIXes). Welcome to the MicroISP™ era.
 
 <sup>(1)</sup> iPhone(R) is a trademark of Apple Inc., registered in the U.S. and other countries.
 
