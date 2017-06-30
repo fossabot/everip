@@ -26,7 +26,7 @@ static struct {
 	bool stder;
 } lg = {
 	LIST_INIT,
-	true, /* debug */
+	false, /* debug */
 	true,
 	true
 };

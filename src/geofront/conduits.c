@@ -260,7 +260,7 @@ static struct csock *_from_terminaldogma( struct csock *csock
   dst_peer = treeoflife_route_to_peer(c->treeoflife, binlen, binrep);
 
   if (!dst_peer) {
-    debug("have route, but no one to send it to?\n");
+    debug("!dst_peer\n");
     return NULL;
   }
 

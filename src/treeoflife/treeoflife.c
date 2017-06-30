@@ -164,12 +164,12 @@ loop:
         while (needle->i < (needle->stop*8)) {
             b = b_val(&(needle->binrep[needle->pos]), needle->i);
             /*debug("I=%u\n", i);*/
-            if (!b && !needle->start && needle->i + 1 != (needle->stop * 8)) {
-                ++needle->i;
-                continue;
-            }
+            //if (!b && !needle->start && needle->i + 1 != (needle->stop * 8)) {
+            //    ++needle->i;
+            //    continue;
+            //}
             ++needle->i;
-            needle->start = 1;
+            //needle->start = 1;
             return b ? needle->height : -1 * needle->height;
         };
         needle->inloop = false;
@@ -182,7 +182,19 @@ loop:
     return 0;
 }
 
-static int stack_linf_diff(uint8_t left[ROUTE_LENGTH], uint8_t right[ROUTE_LENGTH], uint8_t limit)
+static int stack_link_count(uint8_t binrep[ROUTE_LENGTH])
+{
+  int count = 0;
+  struct stack_needle needle;
+  memset(&needle, 0, sizeof(struct stack_needle));
+  needle.binrep = binrep;
+  while (stack_step(&needle)) {
+    count++;
+  }
+  return count;
+}
+
+static int stack_linf_diff(uint8_t left[ROUTE_LENGTH], uint8_t right[ROUTE_LENGTH], int *places)
 {
     int i = 0;
     int score = 0;
@@ -200,62 +212,36 @@ static int stack_linf_diff(uint8_t left[ROUTE_LENGTH], uint8_t right[ROUTE_LENGT
     lval = stack_step(&lneedle);
     rval = stack_step(&rneedle);
     score += abs(lval-rval);
-    if (++i >= limit) return score;
+    i++;
     while (!lneedle.end && !rneedle.end ) {
         lval = stack_step(&lneedle);
         rval = stack_step(&rneedle);
         if (!lval || !rval) break;
         /*debug("lval = %d; rval = %d\n", lval, rval);*/
         score += abs(lval-rval);
-        if (++i >= limit) break;
+        i++;
     }
+    if (places)
+      *places = i;
     return score;
 }
 
 static int stack_debug(struct re_printf *pf, const uint8_t *binrep)
 {
     int err = 0;
-
-    int pos; /* size in bytes */
-    uint8_t height, start, stop, b;
-    height = stack_height_get(binrep);
-    err |= re_hprintf(pf, "[H%u]", height);
-    if (!height) return 0;
-    pos = 1;
-    do {
-        err |= re_hprintf(pf, "[");
-        if (binrep[pos] == 0xFE) { /* 11111110 */
-            stop = 8;
-        } else if ((binrep[pos] & 0xFE) == 0xFC) { /* 1111110x */
-            stop = 7;
-        } else if ((binrep[pos] & 0xFC) == 0xF8) { /* 111110xx */
-            stop = 6;
-        } else if ((binrep[pos] & 0xF8) == 0xF0) { /* 11110xxx */
-            stop = 5;
-        } else if ((binrep[pos] & 0xF0) == 0xE0) { /* 1110xxxx */
-            stop = 4;
-        } else if ((binrep[pos] & 0xE0) == 0xC0) { /* 110xxxxx */
-            stop = 3;
-        } else if ((binrep[pos] & 0xC0) == 0x80) { /* 10xxxxxx */
-            stop = 2;
-        } else if ((binrep[pos] & 0x80) == 0x00) { /* 0xxxxxxx */
-            stop = 1; /* our data is included here */
-        }
-
-        start = 0;
-        for (int i = stop; i < (stop*8); ++i) {
-            b = b_val(&binrep[pos], i);
-            /*debug("I=%u\n", i);*/
-            if (!b && !start && i+1 != (stop*8)) continue;
-            start = 1;
-            err |= re_hprintf(pf, "%s%u", b ? "+" : "-", height);
-        }
-
-        err |= re_hprintf(pf, "]");
-
-        pos += stop;
-
-    } while (--height);
+    int val = 0;
+    struct stack_needle needle;
+    memset(&needle, 0, sizeof(struct stack_needle));
+    needle.binrep = binrep;
+    err |= re_hprintf(pf, "[");
+    val = stack_step(&needle);
+    err |= re_hprintf(pf, "%d", val);
+    while (!needle.end) {
+      val = stack_step(&needle);
+      if (!val) break;
+      err |= re_hprintf(pf, "%s%d", (val>0?"+":""), val);
+    }
+    err |= re_hprintf(pf, "]");
 
     return err;
 }
@@ -454,34 +440,31 @@ struct treeoflife_peer *treeoflife_route_to_peer( struct treeoflife *t
                         , uint8_t routelen
                         , uint8_t *route/*[ROUTE_LENGTH]*/ )
 {
-
+  int places;
   struct le *le;
   struct treeoflife_zone *zone;
-    struct treeoflife_node *tn = NULL;
-
-    struct treeoflife_node *tn_chosen = NULL;
+  struct treeoflife_node *tn = NULL;
+  struct treeoflife_node *tn_chosen = NULL;
 
   int local_diff, parent_diff, temp_diff, chosen_diff;
-
-  uint8_t local_limit;
 
   for (int i = 0; i < ZONE_COUNT; ++i) {
     zone = &t->zone[i];
 
-    local_limit = stack_height_get(zone->binrep);
-    local_diff = stack_linf_diff(route, zone->binrep, local_limit);
+    /*local_limit = stack_link_count(zone->binrep);*/
+    local_diff = stack_linf_diff(route, zone->binrep, &places);
 
-    debug("LOCAL DIFF = %d[LIMIT=%u]\n", local_diff, local_limit);
+    debug("LOCAL DIFF = %d[PLACES=%d]\n", local_diff, places);
     if (zone->parent) { /* how about our parent? */
 
-      parent_diff = stack_linf_diff(route, zone->parent->binrep, local_limit);
+      parent_diff = stack_linf_diff(route, zone->parent->binrep, &places);
       if (parent_diff == 0 && zone->parent->peer && !memcmp(route, zone->parent->binrep, ROUTE_LENGTH)) {
         return zone->parent->peer;
       }
 
-      debug("PARENT DIFF = %d\n", parent_diff);
+      debug("PARENT DIFF = %d[PLACES=%d]\n", parent_diff, places);
       if (parent_diff < local_diff) {
-            if (!tn_chosen || parent_diff > chosen_diff) {
+            if (!tn_chosen || parent_diff < chosen_diff) {
               tn_chosen = zone->parent;
               chosen_diff = parent_diff;
             }
@@ -491,15 +474,15 @@ struct treeoflife_peer *treeoflife_route_to_peer( struct treeoflife *t
     LIST_FOREACH(&t->zone[i].children, le) {
       tn = le->data;
 
-      temp_diff = stack_linf_diff(route, tn->binrep, local_limit);
+      temp_diff = stack_linf_diff(route, tn->binrep, &places);
 
       if (temp_diff == 0 && tn->peer && !memcmp(route, tn->binrep, ROUTE_LENGTH)) {
         return tn->peer;
       }
 
-      debug("TEMP DIFF = %d\n", temp_diff);
+      debug("TEMP DIFF = %d[PLACES=%d]\n", temp_diff, places);
       if (temp_diff < local_diff) {
-            if (!tn_chosen || temp_diff > chosen_diff) {
+            if (!tn_chosen || temp_diff < chosen_diff) {
               tn_chosen = tn;
               chosen_diff = temp_diff;
             }
