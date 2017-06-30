@@ -475,6 +475,9 @@ struct treeoflife_peer *treeoflife_route_to_peer( struct treeoflife *t
     if (zone->parent) { /* how about our parent? */
 
       parent_diff = stack_linf_diff(route, zone->parent->binrep, local_limit);
+      if (parent_diff == 0 && zone->parent->peer && !memcmp(route, zone->parent->binrep, ROUTE_LENGTH)) {
+        return zone->parent->peer;
+      }
 
       debug("PARENT DIFF = %d\n", parent_diff);
       if (parent_diff < local_diff) {
@@ -489,6 +492,11 @@ struct treeoflife_peer *treeoflife_route_to_peer( struct treeoflife *t
       tn = le->data;
 
       temp_diff = stack_linf_diff(route, tn->binrep, local_limit);
+
+      if (temp_diff == 0 && tn->peer && !memcmp(route, tn->binrep, ROUTE_LENGTH)) {
+        return tn->peer;
+      }
+
       debug("TEMP DIFF = %d\n", temp_diff);
       if (temp_diff < local_diff) {
             if (!tn_chosen || temp_diff > chosen_diff) {
