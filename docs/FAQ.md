@@ -21,7 +21,7 @@ Microsoft helped take us from the mainframe era with micro-software. We aim to t
 
 1) You own your own IP Address for*ever*. No monthly costs.
 2) Your IP Address is authenticated, so that no one can become you.
-3) All communications are encrypted, which is very important for banking and infrastrure.
+3) All communications are encrypted, which is very important for banking and infrastructure.
 4) Works with existing network technologies (WiFi, Ethernet, Fibre, etc.) so that there is no cost to rebuild networks
 5) No need for new applications: EVER/IP reports itself to the Operating System as a VPN.
 
