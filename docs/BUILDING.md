@@ -31,7 +31,7 @@ cd libsodium
 ./autogen.sh #requires automake
 ./configure --prefix=$PWD/../build_libsodium --disable-shared
 make
-makeinstall #this will only install to the base of everopen
+make install #this will only install to the base of everopen
 ```
 
 ## Build EVER/IP
