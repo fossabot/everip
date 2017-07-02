@@ -97,7 +97,6 @@ static struct csock *eth_handle_incoming( struct csock *csock
 		    		 , mbuf_get_left(mb));
 
 	if (n < 0) {
-		error("ERR WRITING OUT;\n");
 		err = errno;
 
 		if (EAGAIN == err)
