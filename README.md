@@ -2,6 +2,7 @@
 The Elastic Versatile Encrypted Relay for IP (EVER/IP) Networking Suite
 
 [![Build Status](https://travis-ci.org/connectFree/everip.svg?branch=master)](https://travis-ci.org/connectFree/everip)
+[![FOSSA Status](https://app.fossa.io/api/projects/undefined.svg?type=small)](https://app.fossa.io/projects/undefined?ref=badge_small)
 
 ![EVER/IP Logo](https://raw.githubusercontent.com/connectfree/everip/master/everip_logo.png)
 
@@ -15,7 +16,7 @@ Being entirely local information driven, there is no need for expensive ISPs and
 
 Thanks in part to the iPhone(r)<sup>(1)</sup> and other smartphones of its generation, the computing power that we have in our pocket is incredible. EVER/IP aims to unleash this power, bringing-down the cost of communications worldwide and beyond. 
 
-Microsoft helped take us from the mainframe era with micro-software. We aim to take humanity into an era from Internet eXchanges to Micro Internet eXchanges (MIXes). Welcome to the MicroISP™ era.
+Microsoft helped take us from the mainframe era with micro-software. We aim to take humanity into an era from Internet eXchanges to Micro Internet eXchanges (MIXes). Welcome to the MicroISPb" era.
 
 <sup>(1)</sup> iPhone(R) is a trademark of Apple Inc., registered in the U.S. and other countries.
 
@@ -74,3 +75,6 @@ connectFree, the connectFree logo, EVER and EVER/IP are registered trademarks of
 Copyright (c) 2017 kristopher tate & connectFree Corporation.
 
 This project may be licensed under the terms of the GNU AFFERO General Public License version 3. Corporate and Academic licensing terms are also available. Please contact <licensing@connectfree.co.jp> for details.
+
+
+[![FOSSA Status](https://app.fossa.io/api/projects/undefined.svg?type=large)](https://app.fossa.io/projects/undefined?ref=badge_large)
