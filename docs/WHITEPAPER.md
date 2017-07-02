@@ -6,14 +6,14 @@ This whitepaper aims to describe and outline the EVER/IP Networking Suite.
 
 ## Table of Contents
 
-1. Introduction
-2. Related Work
-3. Design Goals
-4. Implications
-5. Feature Set
-6. Routing Engine
-7. Encryption Engine
-8. Conclusion
+1. [Introduction](#introduction)
+2. [Related Work](#related-work)
+3. [Design Goals](#design-goals)
+4. [Implications](#implications)
+5. [Feature Set](#feature-set)
+6. [Routing Engine](#routing-engine)
+7. [Encryption Engine](#encryption-engine)
+8. [Conclusion](#conclusion)
 
 ## Introduction
 
@@ -56,7 +56,16 @@ Our work focuses on the Internet of Things and building a network of things, ins
 
 ## Feature Set
 
+1. Each device is assigned a cryptographically signed and authenticated public and private key.
+2. Said assigned public/private key is used to generate a cryptographic hash that will represent the node's IP address.
+3. All communications are encrypted at OSI Layer-3, so there is no need to integrate TLS into the application. (TLS can still be used if required)
+4. Packets are routed over any media, so long as another EVER/IP state machine is on the other side. We have implementations for Layer-2 (802.3 Ethernet/802.11 WiFi/Fibre) and UDP connectivity at Layer-3.
+5. Existing applications just work: EVER/IP reports itself to the Operating System as a VPN.
+6. No need for network administrators: network configuration is instant and autonomous.
+
 ## Routing Engine
+
+![Traditional Routing](/docs/traditional-routing.png)
 
 ![MPLS/CJDNS Routing](/docs/label-based-routing.png)
 
