@@ -1,6 +1,8 @@
 # EVER/IP(R)
 The Elastic Versatile Encrypted Relay for IP (EVER/IP) Networking Suite
 
+[![Build Status](https://travis-ci.org/connectFree/everip.svg?branch=master)](https://travis-ci.org/connectFree/everip)
+
 ![EVER/IP Logo](https://raw.githubusercontent.com/connectfree/everip/master/everip_logo.png)
 
 ## What is EVER/IP?
