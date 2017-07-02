@@ -1,0 +1,22 @@
+language: C
+
+compiler:
+  - clang
+
+before_install:
+  - git clone https://github.com/connectFree/everip.git
+  - git clone https://github.com/connectFree/libre.git
+  - git clone https://github.com/connectFree/libsodium.git
+
+install:
+  - cd libre
+  - STATIC=1 USE_OPENSSL= make
+  - cd ../libsodium
+  - ./autogen.sh
+  - ./configure --prefix=$PWD/../build_libsodium --disable-shared
+  - make
+  - make install
+  - cd ../everip
+  
+script:
+  - SIGNED_CLA_LICENSE=1 LIBSODIUM_PATH=../build_libsodium make test
