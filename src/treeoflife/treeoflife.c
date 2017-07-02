@@ -115,7 +115,7 @@ struct stack_needle {
     uint8_t height;
     uint8_t start;
     uint8_t stop;
-    uint8_t *binrep;
+    const uint8_t *binrep;
     int i;
     bool setup;
     bool inloop;
@@ -182,6 +182,7 @@ loop:
     return 0;
 }
 
+#if 0
 static int stack_link_count(uint8_t binrep[ROUTE_LENGTH])
 {
   int count = 0;
@@ -193,6 +194,7 @@ static int stack_link_count(uint8_t binrep[ROUTE_LENGTH])
   }
   return count;
 }
+#endif
 
 static int stack_linf_diff(uint8_t left[ROUTE_LENGTH], uint8_t right[ROUTE_LENGTH], int *places)
 {
